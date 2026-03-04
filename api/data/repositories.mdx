@@ -1,0 +1,224 @@
+---
+title: Repository Implementations
+description: Data layer repository implementations that bridge domain logic with data sources
+---
+
+Repository implementations in the data layer provide concrete implementations of domain repository interfaces. They handle data operations, coordinate between local cache and remote APIs, and manage data transformations.
+
+## RealCartRepository
+
+Implements cart operations with local caching and reactive state management.
+
+**Location:** `cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/data/repository/RealCartRepository.kt`
+
+### Constructor
+
+<ParamField path="cacheProvider" type="CacheProvider" required>
+  Cache provider for persisting cart data
+</ParamField>
+
+### Methods
+
+#### updateCartItem
+
+Updates or removes a cart item for a specific user.
+
+<ParamField path="userId" type="String" required>
+  The user ID whose cart to update
+</ParamField>
+
+<ParamField path="cartItem" type="CartItem" required>
+  The cart item to update. If quantity is 0, the item is removed
+</ParamField>
+
+```kotlin
+fun updateCartItem(userId: String, cartItem: CartItem)
+```
+
+#### observeCart
+
+Observes cart changes reactively for a specific user.
+
+<ParamField path="userId" type="String" required>
+  The user ID whose cart to observe
+</ParamField>
+
+<ResponseField name="return" type="Flow<Cart>">
+  A Flow emitting cart updates
+</ResponseField>
+
+```kotlin
+fun observeCart(userId: String): Flow<Cart>
+```
+
+#### getCart
+
+Retrieves the current cart state for a user.
+
+<ParamField path="userId" type="String" required>
+  The user ID whose cart to retrieve
+</ParamField>
+
+<ResponseField name="return" type="Cart">
+  The current cart state
+</ResponseField>
+
+```kotlin
+fun getCart(userId: String): Cart
+```
+
+---
+
+## RealProductRepository
+
+Fetches product data from remote API.
+
+**Location:** `product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/data/repository/RealProductRepository.kt`
+
+### Constructor
+
+<ParamField path="httpClient" type="HttpClient" required>
+  Ktor HTTP client for making network requests
+</ParamField>
+
+### Methods
+
+#### getProducts
+
+Fetches all products from the remote API.
+
+<ResponseField name="return" type="Answer<List<Product>, Unit>">
+  Success with product list or error
+</ResponseField>
+
+```kotlin
+suspend fun getProducts(): Answer<List<Product>, Unit>
+```
+
+**API Endpoint:** `GET https://api.json-generator.com/templates/Vc6TVI8VwZNT/data`
+
+---
+
+## RealUserRepository
+
+Handles user authentication and caching user data.
+
+**Location:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/data/repository/RealUserRepository.kt`
+
+### Constructor
+
+<ParamField path="client" type="HttpClient" required>
+  HTTP client for authentication requests
+</ParamField>
+
+<ParamField path="cacheProvider" type="CacheProvider" required>
+  Cache provider for persisting user session
+</ParamField>
+
+### Methods
+
+#### login
+
+Authenticates a user with email and password.
+
+<ParamField path="loginRequest" type="LoginRequest" required>
+  Login credentials containing email and password
+</ParamField>
+
+<ResponseField name="return" type="Answer<Unit, LoginError>">
+  Success or specific login error (IncorrectCredentials, GenericError)
+</ResponseField>
+
+```kotlin
+suspend fun login(loginRequest: LoginRequest): Answer<Unit, LoginError>
+```
+
+**API Endpoint:** `POST https://api.json-generator.com/templates/Q7s_NUVpyBND/data`
+
+#### getUser
+
+Retrieves the cached user data.
+
+<ResponseField name="return" type="User">
+  The current logged-in user
+</ResponseField>
+
+```kotlin
+fun getUser(): User
+```
+
+#### isLoggedIn
+
+Checks if a user is currently logged in.
+
+<ResponseField name="return" type="Boolean">
+  True if user is logged in, false otherwise
+</ResponseField>
+
+```kotlin
+fun isLoggedIn(): Boolean
+```
+
+---
+
+## RealWishlistRepository
+
+Manages wishlist operations with local caching and reactive updates.
+
+**Location:** `wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/data/repository/RealWishlistRepository.kt`
+
+### Constructor
+
+<ParamField path="cacheProvider" type="CacheProvider" required>
+  Cache provider for persisting wishlist data
+</ParamField>
+
+### Methods
+
+#### addToWishlist
+
+Adds an item to the user's wishlist.
+
+<ParamField path="userId" type="String" required>
+  The user ID whose wishlist to update
+</ParamField>
+
+<ParamField path="wishlistItem" type="WishlistItem" required>
+  The item to add to the wishlist
+</ParamField>
+
+```kotlin
+fun addToWishlist(userId: String, wishlistItem: WishlistItem)
+```
+
+#### removeFromWishlist
+
+Removes an item from the user's wishlist.
+
+<ParamField path="userId" type="String" required>
+  The user ID whose wishlist to update
+</ParamField>
+
+<ParamField path="wishlistItemId" type="String" required>
+  The ID of the item to remove
+</ParamField>
+
+```kotlin
+fun removeFromWishlist(userId: String, wishlistItemId: String)
+```
+
+#### observeWishlist
+
+Observes wishlist changes reactively for a user.
+
+<ParamField path="userId" type="String" required>
+  The user ID whose wishlist to observe
+</ParamField>
+
+<ResponseField name="return" type="Flow<List<WishlistItem>>">
+  A Flow emitting wishlist updates
+</ResponseField>
+
+```kotlin
+fun observeWishlist(userId: String): Flow<List<WishlistItem>>
+```

@@ -1,122 +1,110 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Real Clean Architecture in Android",
+  "theme": "linden",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#3DDC84",
+    "light": "#7EE9A8",
+    "dark": "#2BB26A"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/DenisBronx/Real-Clean-Architecture-In-Android---Sample"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/DenisBronx/Real-Clean-Architecture-In-Android---Sample"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Architecture",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "architecture/overview",
+              "architecture/clean-architecture",
+              "architecture/solid-principles",
+              "architecture/modularization"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Layers",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "layers/domain",
+              "layers/data",
+              "layers/presentation"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Components",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "components/overview",
+              "components/cart",
+              "components/product",
+              "components/user",
+              "components/wishlist",
+              "components/money"
+            ]
+          },
+          {
+            "group": "Libraries",
+            "pages": [
+              "libraries/overview",
+              "libraries/cache",
+              "libraries/httpclient",
+              "libraries/viewmodel",
+              "libraries/foundations"
+            ]
+          },
+          {
+            "group": "Testing",
+            "pages": [
+              "testing/overview",
+              "testing/unit-tests",
+              "testing/test-utilities"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Domain Layer",
             "pages": [
-              "api-reference/introduction"
+              "api/domain/use-cases",
+              "api/domain/repositories",
+              "api/domain/models"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Data Layer",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/data/repositories",
+              "api/data/cache"
+            ]
+          },
+          {
+            "group": "Presentation Layer",
+            "pages": [
+              "api/presentation/viewmodels",
+              "api/presentation/screens"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

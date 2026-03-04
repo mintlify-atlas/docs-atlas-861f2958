@@ -1,0 +1,351 @@
+---
+title: SOLID Principles
+description: How SOLID principles are applied throughout the Real Clean Architecture codebase
+---
+
+The Real Clean Architecture strictly follows SOLID principles to ensure maintainability, testability, and flexibility.
+
+## Single Responsibility Principle (SRP)
+
+<Tip>
+  **Definition**: A class should have one, and only one, reason to change.
+</Tip>
+
+Each use case has a single, well-defined responsibility:
+
+<CodeGroup>
+```kotlin AddToWishlistUseCase
+package com.denisbrandi.androidrealca.wishlist.domain.usecase
+
+import com.denisbrandi.androidrealca.user.domain.usecase.GetUser
+import com.denisbrandi.androidrealca.wishlist.domain.model.WishlistItem
+import com.denisbrandi.androidrealca.wishlist.domain.repository.WishlistRepository
+
+internal class AddToWishlistUseCase(
+    private val getUser: GetUser,
+    private val wishlistRepository: WishlistRepository
+) : AddToWishlist {
+    override fun invoke(wishlistItem: WishlistItem) {
+        wishlistRepository.addToWishlist(getUser().id, wishlistItem)
+    }
+}
+```
+
+```kotlin RemoveFromWishlistUseCase
+package com.denisbrandi.androidrealca.wishlist.domain.usecase
+
+internal class RemoveFromWishlistUseCase(
+    private val getUser: GetUser,
+    private val wishlistRepository: WishlistRepository
+) : RemoveFromWishlist {
+    override fun invoke(wishlistItemId: String) {
+        wishlistRepository.removeFromWishlist(getUser().id, wishlistItemId)
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+  Each use case does **one thing only**: AddToWishlistUseCase adds items, RemoveFromWishlistUseCase removes items. They don't share implementation even though they're similar.
+</Info>
+
+### Domain Models with Single Responsibility
+
+Domain models encapsulate their own validation logic:
+
+```kotlin user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/Email.kt
+class Email(private val value: String) {
+    fun isValid(): Boolean {
+        return value.isNotBlank() && value.matches(Regex(EMAIL_ADDRESS_PATTERN))
+    }
+
+    private companion object {
+        const val EMAIL_ADDRESS_PATTERN =
+            "(?:[a-zA-Z0-9!#\$%&'*+/=?^_`{|}~-]+(?:\\.[a-zA-Z0-9!#\$%&'*+/=?^_`{|}~-]+)*|\"(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21\\x23-\\x5b\\x5d-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])*\")@(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?|\\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-zA-Z0-9-]*[a-zA-Z0-9]:(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21-\\x5a\\x53-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])+)\\])"
+    }
+}
+```
+
+The `Email` class is responsible **only** for email validation.
+
+## Open/Closed Principle (OCP)
+
+<Tip>
+  **Definition**: Software entities should be open for extension, but closed for modification.
+</Tip>
+
+Repository interfaces allow new implementations without modifying existing code:
+
+```kotlin wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/repository/WishlistRepository.kt
+internal interface WishlistRepository {
+    fun addToWishlist(userId: String, wishlistItem: WishlistItem)
+    fun removeFromWishlist(userId: String, wishlistItemId: String)
+    fun observeWishlist(userId: String): Flow<List<WishlistItem>>
+}
+```
+
+You can create different implementations (cache-based, network-based, in-memory) without changing the interface:
+
+```kotlin Current Implementation: Cache-based
+internal class RealWishlistRepository(
+    private val cacheProvider: CacheProvider
+) : WishlistRepository {
+    // Implementation using cache
+}
+```
+
+```kotlin Possible Future Implementation: Network-based
+internal class NetworkWishlistRepository(
+    private val httpClient: HttpClient
+) : WishlistRepository {
+    // Implementation using API calls
+}
+```
+
+<Info>
+  Use cases depend on the interface, not the implementation. You can swap implementations without touching use case code.
+</Info>
+
+## Liskov Substitution Principle (LSP)
+
+<Tip>
+  **Definition**: Objects should be replaceable with instances of their subtypes without altering correctness.
+</Tip>
+
+The `Answer` type demonstrates LSP through its sealed class hierarchy:
+
+```kotlin foundations/src/commonMain/kotlin/com/denisbrandi/androidrealca/foundations/Answer.kt
+sealed class Answer<out T, out E> {
+    data class Success<out T>(
+        val data: T,
+    ) : Answer<T, Nothing>()
+
+    data class Error<out E>(
+        val reason: E,
+    ) : Answer<Nothing, E>()
+
+    fun <C> fold(
+        success: (T) -> C,
+        error: (E) -> C,
+    ): C =
+        when (this) {
+            is Success -> success(data)
+            is Error -> error(reason)
+        }
+}
+```
+
+Any code expecting `Answer<T, E>` can work with both `Success` and `Error` subtypes:
+
+```kotlin product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/domain/usecase/GetProducts.kt
+fun interface GetProducts {
+    suspend operator fun invoke(): Answer<List<Product>, Unit>
+}
+```
+
+Callers don't need to know which specific subtype they'll receive - they can handle both cases through the sealed class.
+
+### ViewModel Delegation
+
+ViewModels use delegation to ensure substitutability:
+
+```kotlin viewmodel/src/commonMain/kotlin/com/denisbrandi/androidrealca/viewmodel/ViewModel.kt
+interface StateViewModel<State> {
+    val state: StateFlow<State>
+}
+
+class StateDelegate<State> : StateViewModel<State> {
+    private lateinit var _state: MutableStateFlow<State>
+    override val state: StateFlow<State>
+        get() = _state.asStateFlow()
+
+    fun setDefaultState(state: State) {
+        _state = MutableStateFlow(state)
+    }
+
+    fun updateState(block: (State) -> State) {
+        _state.update {
+            block(it)
+        }
+    }
+}
+```
+
+ViewModels can be substituted anywhere `StateViewModel<State>` is expected:
+
+```kotlin
+internal class RealWishlistViewModel(
+    observeUserWishlist: ObserveUserWishlist,
+    private val removeFromWishlist: RemoveFromWishlist,
+    private val addCartItem: AddCartItem,
+    private val stateDelegate: StateDelegate<WishlistScreenState>
+) : WishlistViewModel, StateViewModel<WishlistScreenState> by stateDelegate, ViewModel()
+```
+
+## Interface Segregation Principle (ISP)
+
+<Tip>
+  **Definition**: No client should be forced to depend on methods it does not use.
+</Tip>
+
+The project uses **function interfaces** (SAM interfaces) for single-method use cases:
+
+```kotlin product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/domain/usecase/GetProducts.kt
+fun interface GetProducts {
+    suspend operator fun invoke(): Answer<List<Product>, Unit>
+}
+```
+
+<Info>
+  Using `fun interface` ensures clients only depend on the exact operation they need, not a broader interface with multiple methods.
+</Info>
+
+### Segregated ViewModel Interfaces
+
+ViewModels separate state and event concerns:
+
+```kotlin viewmodel/src/commonMain/kotlin/com/denisbrandi/androidrealca/viewmodel/ViewModel.kt
+interface StateViewModel<State> {
+    val state: StateFlow<State>
+}
+
+interface EventViewModel<ViewEvent> {
+    val viewEvent: Flow<ViewEvent>
+}
+```
+
+Views can depend only on what they need:
+- If a view only needs state: implement `StateViewModel`
+- If a view needs events: implement `EventViewModel`
+- If both are needed: implement both interfaces
+
+## Dependency Inversion Principle (DIP)
+
+<Tip>
+  **Definition**: High-level modules should not depend on low-level modules. Both should depend on abstractions.
+</Tip>
+
+Use cases depend on **repository interfaces**, not implementations:
+
+<Tabs>
+  <Tab title="High-Level (Use Case)">
+    ```kotlin wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/AddToWishlistUseCase.kt
+    internal class AddToWishlistUseCase(
+        private val getUser: GetUser,
+        private val wishlistRepository: WishlistRepository  // Depends on abstraction
+    ) : AddToWishlist {
+        override fun invoke(wishlistItem: WishlistItem) {
+            wishlistRepository.addToWishlist(getUser().id, wishlistItem)
+        }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Abstraction (Interface)">
+    ```kotlin wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/repository/WishlistRepository.kt
+    internal interface WishlistRepository {
+        fun addToWishlist(userId: String, wishlistItem: WishlistItem)
+        fun removeFromWishlist(userId: String, wishlistItemId: String)
+        fun observeWishlist(userId: String): Flow<List<WishlistItem>>
+    }
+    ```
+  </Tab>
+
+  <Tab title="Low-Level (Implementation)">
+    ```kotlin wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/data/repository/RealWishlistRepository.kt
+    internal class RealWishlistRepository(
+        private val cacheProvider: CacheProvider
+    ) : WishlistRepository {  // Implements the abstraction
+        // Implementation details...
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Abstraction of Framework Dependencies
+
+The cache library abstracts storage implementation:
+
+```kotlin cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/RealCachedObject.kt
+class RealCachedObject<T : Any>(
+    private val fileName: String,
+    private val settings: Settings,
+    private val serializer: KSerializer<T>,
+    private val defaultValue: T
+) : CachedObject<T> {
+    override fun put(value: T) {
+        settings.encodeValue(serializer, fileName, value)
+    }
+
+    override fun get(): T {
+        return settings.decodeValue(serializer, fileName, defaultValue)
+    }
+}
+```
+
+<Info>
+  Component modules depend on `CachedObject` interface, not on SharedPreferences or any specific storage mechanism.
+</Info>
+
+## Benefits of SOLID
+
+<CardGroup cols={2}>
+  <Card title="Testability" icon="flask">
+    Dependencies on abstractions make mocking easy
+  </Card>
+  <Card title="Maintainability" icon="wrench">
+    Single responsibility makes changes isolated
+  </Card>
+  <Card title="Flexibility" icon="shuffle">
+    Swap implementations without modifying use cases
+  </Card>
+  <Card title="Scalability" icon="chart-line">
+    Add new features by extending, not modifying
+  </Card>
+</CardGroup>
+
+## Real-World Example: Login Flow
+
+See all SOLID principles working together:
+
+```kotlin user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/usecase/LoginUseCase.kt
+internal class LoginUseCase(
+    private val userRepository: UserRepository  // DIP: Depend on abstraction
+) : Login {  // ISP: Single method interface
+    override suspend fun invoke(loginRequest: LoginRequest): Answer<Unit, LoginError> {
+        return when {
+            !Email(loginRequest.email).isValid() -> {  // SRP: Email validates itself
+                Answer.Error(LoginError.InvalidEmail)
+            }
+
+            !Password(loginRequest.password).isValid() -> {  // SRP: Password validates itself
+                Answer.Error(LoginError.InvalidPassword)
+            }
+
+            else -> {
+                return userRepository.login(loginRequest)  // OCP: Repository is extensible
+            }
+        }
+    }
+}
+```
+
+<Check>
+  Every SOLID principle is applied:
+  - **SRP**: LoginUseCase only handles login logic
+  - **OCP**: UserRepository can have multiple implementations
+  - **LSP**: Any UserRepository implementation works
+  - **ISP**: Login interface has only one method
+  - **DIP**: Depends on UserRepository abstraction
+</Check>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Clean Architecture" href="/architecture/clean-architecture" icon="circle-nodes">
+    Learn about layer separation
+  </Card>
+  <Card title="Modularization" href="/architecture/modularization" icon="boxes-stacked">
+    Understand the module structure
+  </Card>
+</CardGroup>

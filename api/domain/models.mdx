@@ -1,0 +1,299 @@
+---
+title: Domain Models
+description: Reference of all domain models and value objects
+---
+
+Domain models represent the core business entities and value objects in the application.
+
+## Cart Models
+
+### Cart
+
+Represents a user's shopping cart with items and computed totals.
+
+**Source:** `cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/model/Cart.kt:5`
+
+```kotlin
+data class Cart(val cartItems: List<CartItem>)
+```
+
+<ParamField path="cartItems" type="List<CartItem>" required>
+  List of items in the cart
+</ParamField>
+
+#### Methods
+
+**getSubtotal(): Money?**
+
+Calculates the subtotal of all items in the cart.
+
+<ResponseField name="Money?" type="Money?">
+  Subtotal amount, or null if cart is empty
+</ResponseField>
+
+**Note:** All items must have the same currency. Returns the sum of (price × quantity) for all items.
+
+**getNumberOfItems(): Int**
+
+Calculates the total number of items in the cart.
+
+<ResponseField name="Int" type="Int">
+  Sum of all item quantities
+</ResponseField>
+
+---
+
+### CartItem
+
+Represents a single item in the shopping cart.
+
+**Source:** `cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/model/CartItem.kt:5`
+
+```kotlin
+data class CartItem(
+    val id: String,
+    val name: String,
+    val money: Money,
+    val imageUrl: String,
+    val quantity: Int
+)
+```
+
+<ParamField path="id" type="String" required>
+  Unique identifier for the cart item
+</ParamField>
+
+<ParamField path="name" type="String" required>
+  Display name of the item
+</ParamField>
+
+<ParamField path="money" type="Money" required>
+  Price per unit
+</ParamField>
+
+<ParamField path="imageUrl" type="String" required>
+  URL of the item image
+</ParamField>
+
+<ParamField path="quantity" type="Int" required>
+  Number of units in cart
+</ParamField>
+
+---
+
+## Product Models
+
+### Product
+
+Represents a product available for purchase.
+
+**Source:** `product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/domain/model/Product.kt:5`
+
+```kotlin
+data class Product(
+    val id: String,
+    val name: String,
+    val money: Money,
+    val imageUrl: String
+)
+```
+
+<ParamField path="id" type="String" required>
+  Unique identifier for the product
+</ParamField>
+
+<ParamField path="name" type="String" required>
+  Display name of the product
+</ParamField>
+
+<ParamField path="money" type="Money" required>
+  Price of the product
+</ParamField>
+
+<ParamField path="imageUrl" type="String" required>
+  URL of the product image
+</ParamField>
+
+---
+
+## Money Models
+
+### Money
+
+Represents a monetary amount with currency.
+
+**Source:** `money-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/money/domain/model/Money.kt:3`
+
+```kotlin
+data class Money(val amount: Double, val currencySymbol: String)
+```
+
+<ParamField path="amount" type="Double" required>
+  The numerical amount
+</ParamField>
+
+<ParamField path="currencySymbol" type="String" required>
+  Currency symbol (e.g., "$", "€", "£")
+</ParamField>
+
+---
+
+## User Models
+
+### User
+
+Represents an authenticated user.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/User.kt:3`
+
+```kotlin
+data class User(val id: String, val fullName: String)
+```
+
+<ParamField path="id" type="String" required>
+  Unique identifier for the user
+</ParamField>
+
+<ParamField path="fullName" type="String" required>
+  Full name of the user
+</ParamField>
+
+---
+
+### LoginRequest
+
+Contains user login credentials.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/LoginRequest.kt:3`
+
+```kotlin
+data class LoginRequest(val email: String, val password: String)
+```
+
+<ParamField path="email" type="String" required>
+  User's email address
+</ParamField>
+
+<ParamField path="password" type="String" required>
+  User's password
+</ParamField>
+
+---
+
+### LoginError
+
+Sealed interface representing possible login errors.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/LoginError.kt:3`
+
+```kotlin
+sealed interface LoginError {
+    data object InvalidEmail : LoginError
+    data object InvalidPassword : LoginError
+    data object GenericError : LoginError
+    data object IncorrectCredentials : LoginError
+}
+```
+
+<ResponseField name="InvalidEmail" type="LoginError">
+  Email format is invalid
+</ResponseField>
+
+<ResponseField name="InvalidPassword" type="LoginError">
+  Password does not meet requirements (minimum 8 characters)
+</ResponseField>
+
+<ResponseField name="GenericError" type="LoginError">
+  Generic error occurred during login
+</ResponseField>
+
+<ResponseField name="IncorrectCredentials" type="LoginError">
+  Email or password is incorrect
+</ResponseField>
+
+---
+
+### Email
+
+Value object for email validation.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/Email.kt:3`
+
+```kotlin
+class Email(private val value: String)
+```
+
+<ParamField path="value" type="String" required>
+  The email string to validate
+</ParamField>
+
+#### Methods
+
+**isValid(): Boolean**
+
+Validates the email format using RFC 5322 pattern.
+
+<ResponseField name="Boolean" type="Boolean">
+  True if email matches valid email pattern and is not blank
+</ResponseField>
+
+---
+
+### Password
+
+Value object for password validation.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/Password.kt:3`
+
+```kotlin
+class Password(private val value: String)
+```
+
+<ParamField path="value" type="String" required>
+  The password string to validate
+</ParamField>
+
+#### Methods
+
+**isValid(): Boolean**
+
+Validates password meets minimum requirements.
+
+<ResponseField name="Boolean" type="Boolean">
+  True if password is at least 8 characters long
+</ResponseField>
+
+---
+
+## Wishlist Models
+
+### WishlistItem
+
+Represents an item in the user's wishlist.
+
+**Source:** `wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/model/WishlistItem.kt:5`
+
+```kotlin
+data class WishlistItem(
+    val id: String,
+    val name: String,
+    val money: Money,
+    val imageUrl: String
+)
+```
+
+<ParamField path="id" type="String" required>
+  Unique identifier for the wishlist item
+</ParamField>
+
+<ParamField path="name" type="String" required>
+  Display name of the item
+</ParamField>
+
+<ParamField path="money" type="Money" required>
+  Price of the item
+</ParamField>
+
+<ParamField path="imageUrl" type="String" required>
+  URL of the item image
+</ParamField>

@@ -1,0 +1,243 @@
+---
+title: Cache Module
+description: Persistent storage abstraction with reactive Flow support using multiplatform-settings
+---
+
+The cache module provides a type-safe abstraction for persistent storage using the multiplatform-settings library. It supports both simple get/put operations and reactive Flow-based observation.
+
+## Core Interfaces
+
+### CacheProvider
+
+The main factory interface for creating cached objects.
+
+```kotlin cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/CacheProvider.kt
+interface CacheProvider {
+    fun <T : Any> getCachedObject(
+        fileName: String,
+        serializer: KSerializer<T>,
+        defaultValue: T
+    ): CachedObject<T>
+
+    fun <T : Any> getFlowCachedObject(
+        fileName: String,
+        serializer: KSerializer<T>,
+        defaultValue: T
+    ): FlowCachedObject<T>
+}
+```
+
+<ParamField path="fileName" type="String">
+  Unique identifier for the cached value (used as settings key)
+</ParamField>
+
+<ParamField path="serializer" type="KSerializer<T>">
+  Kotlinx serialization serializer for type T
+</ParamField>
+
+<ParamField path="defaultValue" type="T">
+  Default value returned when no cached value exists
+</ParamField>
+
+### CachedObject
+
+Basic interface for cached values with get/put operations.
+
+```kotlin cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/CachedObject.kt
+interface CachedObject<T : Any> {
+    fun put(value: T)
+    fun get(): T
+}
+```
+
+### FlowCachedObject
+
+Extends `CachedObject` with reactive observation capabilities.
+
+```kotlin cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/FlowCachedObject.kt
+interface FlowCachedObject<T : Any> : CachedObject<T> {
+    fun observe(): Flow<T>
+}
+```
+
+## Implementations
+
+### RealCachedObject
+
+Production implementation using multiplatform-settings for persistence.
+
+```kotlin cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/RealCachedObject.kt
+class RealCachedObject<T : Any>(
+    private val fileName: String,
+    private val settings: Settings,
+    private val serializer: KSerializer<T>,
+    private val defaultValue: T
+) : CachedObject<T> {
+    override fun put(value: T) {
+        settings.encodeValue(serializer, fileName, value)
+    }
+
+    override fun get(): T {
+        return settings.decodeValue(serializer, fileName, defaultValue)
+    }
+}
+```
+
+<Info>
+  Uses `settings.encodeValue` and `settings.decodeValue` from the multiplatform-settings serialization extension for automatic serialization.
+</Info>
+
+### RealFlowCachedObject
+
+Wraps a `CachedObject` to provide Flow-based observation.
+
+```kotlin cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/RealFlowCachedObject.kt
+class RealFlowCachedObject<T : Any>(
+    private val cachedObject: CachedObject<T>
+) : FlowCachedObject<T>, CachedObject<T> by cachedObject {
+
+    private val cacheFlow = MutableStateFlow(get())
+
+    override fun put(value: T) {
+        cachedObject.put(value)
+        cacheFlow.value = value
+    }
+
+    override fun observe(): Flow<T> {
+        return cacheFlow.asStateFlow()
+    }
+}
+```
+
+<Steps>
+  <Step title="Initialize StateFlow">
+    Creates a `MutableStateFlow` initialized with the current cached value
+  </Step>
+  <Step title="Delegate get() operations">
+    Uses Kotlin delegation to forward `get()` calls to the underlying `cachedObject`
+  </Step>
+  <Step title="Synchronize put() operations">
+    Updates both persistent storage and the StateFlow when `put()` is called
+  </Step>
+  <Step title="Expose reactive stream">
+    Returns the StateFlow as an immutable `StateFlow` for observation
+  </Step>
+</Steps>
+
+## Testing Support
+
+### InMemoryCachedObject
+
+Non-persistent implementation for testing.
+
+```kotlin cache-test/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/test/InMemoryCachedObject.kt
+class InMemoryCachedObject<T : Any>(
+    defaultValue: T
+) : CachedObject<T> {
+
+    private var cachedValue = defaultValue
+
+    override fun put(value: T) {
+        cachedValue = value
+    }
+
+    override fun get(): T {
+        return cachedValue
+    }
+}
+```
+
+### TestCacheProvider
+
+Test double for `CacheProvider` with verification support.
+
+```kotlin cache-test/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/test/TestCacheProvider.kt
+class TestCacheProvider(
+    private val expectedFileName: String,
+    private val expectedDefaultValue: Any
+) : CacheProvider {
+
+    lateinit var providedCachedObject: InMemoryCachedObject<*>
+
+    override fun <T : Any> getCachedObject(
+        fileName: String,
+        serializer: KSerializer<T>,
+        defaultValue: T
+    ): CachedObject<T> {
+        return if (expectedFileName == fileName && expectedDefaultValue == defaultValue) {
+            InMemoryCachedObject(defaultValue).also {
+                providedCachedObject = it
+            }
+        } else {
+            throw IllegalStateException("getCachedObject not stubbed")
+        }
+    }
+
+    override fun <T : Any> getFlowCachedObject(
+        fileName: String,
+        serializer: KSerializer<T>,
+        defaultValue: T
+    ): FlowCachedObject<T> {
+        return RealFlowCachedObject(getCachedObject(fileName, serializer, defaultValue))
+    }
+}
+```
+
+<Warning>
+  `TestCacheProvider` will throw `IllegalStateException` if called with unexpected parameters. Always configure it with the expected fileName and defaultValue.
+</Warning>
+
+## Dependencies
+
+```kotlin cache/build.gradle.kts
+commonMain {
+    dependencies {
+        implementation(libs.multiplatform.settings)
+        implementation(libs.multiplatform.settings.serialization)
+        implementation(libs.kotlin.serialization)
+        implementation(libs.coroutines.core)
+    }
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="multiplatform-settings" icon="gear">
+    Cross-platform key-value storage (SharedPreferences on Android, UserDefaults on iOS)
+  </Card>
+  <Card title="kotlinx.serialization" icon="brackets-curly">
+    Type-safe serialization for cached objects
+  </Card>
+  <Card title="kotlinx.coroutines" icon="arrows-spin">
+    Flow support for reactive caching
+  </Card>
+</CardGroup>
+
+## Usage Example
+
+```kotlin
+@Serializable
+data class UserPreferences(
+    val theme: String = "light",
+    val notificationsEnabled: Boolean = true
+)
+
+// Production usage
+val cacheProvider: CacheProvider = // inject from DI
+val prefsCache = cacheProvider.getFlowCachedObject(
+    fileName = "user_preferences",
+    serializer = UserPreferences.serializer(),
+    defaultValue = UserPreferences()
+)
+
+// Observe changes reactively
+prefsCache.observe().collect { prefs ->
+    println("Theme: ${prefs.theme}")
+}
+
+// Update cache
+prefsCache.put(UserPreferences(theme = "dark", notificationsEnabled = false))
+```
+
+<Check>
+  The cache module is fully multiplatform and works seamlessly on Android, iOS, and JVM.
+</Check>

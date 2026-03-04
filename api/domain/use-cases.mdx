@@ -1,0 +1,262 @@
+---
+title: Use Cases
+description: Complete reference of all use cases in the domain layer
+---
+
+Use cases implement the business logic and orchestrate data flow between the presentation and data layers. All use cases follow functional interfaces with operator invoke functions.
+
+## Cart Use Cases
+
+### AddCartItem
+
+Adds an item to the user's cart. If the item already exists, updates the quantity.
+
+**Source:** `cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/CartUseCases.kt:14`
+
+<ParamField path="cartItem" type="CartItem" required>
+  The cart item to add
+</ParamField>
+
+**Returns:** `Unit`
+
+```kotlin
+fun interface AddCartItem {
+    operator fun invoke(cartItem: CartItem)
+}
+```
+
+**Implementation:** `AddCartItemUseCase`
+
+`cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/AddCartItemUseCase.kt:7`
+
+---
+
+### UpdateCartItem
+
+Updates an existing cart item (quantity, etc.).
+
+**Source:** `cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/CartUseCases.kt:6`
+
+<ParamField path="cartItem" type="CartItem" required>
+  The cart item to update
+</ParamField>
+
+**Returns:** `Unit`
+
+```kotlin
+fun interface UpdateCartItem {
+    operator fun invoke(cartItem: CartItem)
+}
+```
+
+**Implementation:** `UpdateCartItemUseCase`
+
+`cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/UpdateCartItemUseCase.kt:7`
+
+---
+
+### ObserveUserCart
+
+Observes the current user's shopping cart in real-time.
+
+**Source:** `cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/CartUseCases.kt:10`
+
+**Returns:** `Flow<Cart>` - A flow emitting cart updates
+
+```kotlin
+fun interface ObserveUserCart {
+    operator fun invoke(): Flow<Cart>
+}
+```
+
+**Implementation:** `ObserveUserCartUseCase`
+
+`cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/ObserveUserCartUseCase.kt:8`
+
+---
+
+## Product Use Cases
+
+### GetProducts
+
+Retrieves the list of available products.
+
+**Source:** `product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/domain/usecase/GetProducts.kt:6`
+
+**Returns:** `Answer<List<Product>, Unit>` - Success with product list or error
+
+```kotlin
+fun interface GetProducts {
+    suspend operator fun invoke(): Answer<List<Product>, Unit>
+}
+```
+
+<ResponseField name="Success" type="List<Product>">
+  List of available products
+</ResponseField>
+
+<ResponseField name="Error" type="Unit">
+  Error state (no specific error type)
+</ResponseField>
+
+---
+
+## User Use Cases
+
+### Login
+
+Authenticates a user with email and password.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/usecase/UserUseCases.kt:6`
+
+<ParamField path="loginRequest" type="LoginRequest" required>
+  The login credentials containing email and password
+</ParamField>
+
+**Returns:** `Answer<Unit, LoginError>` - Success or specific login error
+
+```kotlin
+fun interface Login {
+    suspend operator fun invoke(loginRequest: LoginRequest): Answer<Unit, LoginError>
+}
+```
+
+<ResponseField name="Success" type="Unit">
+  Login successful
+</ResponseField>
+
+<ResponseField name="Error" type="LoginError">
+  One of: InvalidEmail, InvalidPassword, GenericError, IncorrectCredentials
+</ResponseField>
+
+**Implementation:** `LoginUseCase`
+
+`user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/usecase/LoginUseCase.kt:7`
+
+**Validation:**
+- Email must match valid email pattern
+- Password must be at least 8 characters
+
+---
+
+### GetUser
+
+Retrieves the currently logged-in user.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/usecase/UserUseCases.kt:10`
+
+**Returns:** `User` - The current user
+
+```kotlin
+fun interface GetUser {
+    operator fun invoke(): User
+}
+```
+
+---
+
+### IsUserLoggedIn
+
+Checks if a user is currently logged in.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/usecase/UserUseCases.kt:14`
+
+**Returns:** `Boolean` - True if user is logged in
+
+```kotlin
+fun interface IsUserLoggedIn {
+    operator fun invoke(): Boolean
+}
+```
+
+---
+
+## Wishlist Use Cases
+
+### AddToWishlist
+
+Adds an item to the user's wishlist.
+
+**Source:** `wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/WishlistUseCases.kt:6`
+
+<ParamField path="wishlistItem" type="WishlistItem" required>
+  The item to add to wishlist
+</ParamField>
+
+**Returns:** `Unit`
+
+```kotlin
+fun interface AddToWishlist {
+    operator fun invoke(wishlistItem: WishlistItem)
+}
+```
+
+**Implementation:** `AddToWishlistUseCase`
+
+`wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/AddToWishlistUseCase.kt:7`
+
+---
+
+### RemoveFromWishlist
+
+Removes an item from the user's wishlist.
+
+**Source:** `wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/WishlistUseCases.kt:10`
+
+<ParamField path="wishlistItemId" type="String" required>
+  The ID of the item to remove
+</ParamField>
+
+**Returns:** `Unit`
+
+```kotlin
+fun interface RemoveFromWishlist {
+    operator fun invoke(wishlistItemId: String)
+}
+```
+
+**Implementation:** `RemoveFromWishlistUseCase`
+
+`wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/RemoveFromWishlistUseCase.kt:6`
+
+---
+
+### ObserveUserWishlist
+
+Observes the current user's wishlist in real-time.
+
+**Source:** `wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/WishlistUseCases.kt:14`
+
+**Returns:** `Flow<List<WishlistItem>>` - A flow emitting wishlist updates
+
+```kotlin
+fun interface ObserveUserWishlist {
+    operator fun invoke(): Flow<List<WishlistItem>>
+}
+```
+
+**Implementation:** `ObserveUserWishlistUseCase`
+
+`wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/ObserveUserWishlistUseCase.kt:8`
+
+---
+
+### ObserveUserWishlistIds
+
+Observes only the IDs of items in the user's wishlist.
+
+**Source:** `wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/WishlistUseCases.kt:18`
+
+**Returns:** `Flow<List<String>>` - A flow emitting list of wishlist item IDs
+
+```kotlin
+fun interface ObserveUserWishlistIds {
+    operator fun invoke(): Flow<List<String>>
+}
+```
+
+**Implementation:** `ObserveUserWishlistIdsUseCase`
+
+`wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/ObserveUserWishlistIdsUseCase.kt:5`
+
+**Note:** This use case transforms the full wishlist flow to extract only IDs.

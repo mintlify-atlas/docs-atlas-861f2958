@@ -1,0 +1,194 @@
+---
+title: Introduction
+description: Learn about Real Clean Architecture in Android and why it matters for building scalable, maintainable applications
+---
+
+## What is Real Clean Architecture?
+
+This project demonstrates how to implement Clean Architecture in an Android application while strictly adhering to SOLID principles. It provides a clear, practical example of Clean Architecture patterns with minimal reliance on third-party libraries, emphasizing simplicity, testability, and maintainability.
+
+## Why Clean Architecture?
+
+Clean Architecture separates your application into distinct layers with clear dependencies, making your codebase:
+
+- **Testable**: Pure business logic independent of frameworks
+- **Maintainable**: Changes are isolated to specific layers
+- **Scalable**: Add features without affecting existing code
+- **Framework-independent**: Domain layer works anywhere
+
+<Note>
+  The domain layer is completely framework-independent, enabling fast compilation and easy testing without Android dependencies.
+</Note>
+
+## Key Benefits
+
+<CardGroup cols={2}>
+  <Card title="SOLID Principles" icon="cube">
+    Every component follows Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion principles.
+  </Card>
+  
+  <Card title="Fast Compilation" icon="bolt">
+    Component modules don't depend on Android framework, resulting in significantly faster build times.
+  </Card>
+  
+  <Card title="Pure Kotlin" icon="code">
+    Domain and data layers use pure Kotlin/KMP, making them reusable across platforms.
+  </Card>
+  
+  <Card title="Highly Testable" icon="vial">
+    Business logic is completely isolated, enabling easy unit testing without mocks or Android dependencies.
+  </Card>
+</CardGroup>
+
+## Architecture Layers
+
+The project is organized into three main layers:
+
+### Domain Layer
+
+Contains pure business logic with no framework dependencies:
+
+```kotlin
+internal interface UserRepository {
+    suspend fun login(loginRequest: LoginRequest): Answer<Unit, LoginError>
+    fun getUser(): User
+    fun isLoggedIn(): Boolean
+}
+```
+
+```kotlin
+internal class LoginUseCase(
+    private val userRepository: UserRepository
+) : Login {
+    override suspend fun invoke(loginRequest: LoginRequest): Answer<Unit, LoginError> {
+        return when {
+            !Email(loginRequest.email).isValid() -> {
+                Answer.Error(LoginError.InvalidEmail)
+            }
+            !Password(loginRequest.password).isValid() -> {
+                Answer.Error(LoginError.InvalidPassword)
+            }
+            else -> {
+                return userRepository.login(loginRequest)
+            }
+        }
+    }
+}
+```
+
+### Data Layer
+
+Implements repositories and handles external data sources:
+
+```kotlin
+internal class RealUserRepository(
+    private val client: HttpClient,
+    cacheProvider: CacheProvider
+) : UserRepository {
+    override suspend fun login(loginRequest: LoginRequest): Answer<Unit, LoginError> {
+        return try {
+            val response = client.post("https://api.json-generator.com/templates/Q7s_NUVpyBND/data") {
+                headers {
+                    append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    val accessTokenHeader = AccessTokenProvider.getAccessTokenHeader()
+                    append(accessTokenHeader.first, accessTokenHeader.second)
+                }
+                setBody(JsonLoginRequestDTO(loginRequest.email, loginRequest.password))
+            }
+            if (response.status.isSuccess()) {
+                handleSuccessfulLoginResponse(response)
+            } else {
+                handleFailingLoginResponse(response)
+            }
+        } catch (t: Throwable) {
+            Answer.Error(LoginError.GenericError)
+        }
+    }
+}
+```
+
+### Presentation Layer
+
+Handles UI and user interactions using Jetpack Compose.
+
+## Modularization Strategy
+
+The project uses a "Package by Component" approach with four module types:
+
+<Steps>
+  <Step title="Library Modules">
+    Provide reusable utilities like cache, httpclient, and designsystem that can be shared across features.
+  </Step>
+  
+  <Step title="Component Modules">
+    Contain domain and data layers for specific features (e.g., `user-component`, `cart-component`, `product-component`). Built with pure Kotlin/KMP for fast compilation.
+  </Step>
+  
+  <Step title="UI Modules">
+    Handle the presentation layer for features (e.g., `cart-ui`, `wishlist-ui`, `plp-ui`). Use Jetpack Compose for UI.
+  </Step>
+  
+  <Step title="App Module">
+    Integrates everything together, handling navigation and dependency injection.
+  </Step>
+</Steps>
+
+## Core Concepts
+
+### Answer Type
+
+The project uses a custom `Answer` type for error handling instead of exceptions:
+
+```kotlin
+sealed class Answer<out T, out E> {
+    data class Success<out T>(
+        val data: T,
+    ) : Answer<T, Nothing>()
+
+    data class Error<out E>(
+        val reason: E,
+    ) : Answer<Nothing, E>()
+
+    fun <C> fold(
+        success: (T) -> C,
+        error: (E) -> C,
+    ): C =
+        when (this) {
+            is Success -> success(data)
+            is Error -> error(reason)
+        }
+}
+```
+
+This provides type-safe error handling and makes failure cases explicit in function signatures.
+
+### Domain Models
+
+Domain models are simple data classes with business logic:
+
+```kotlin
+data class Cart(val cartItems: List<CartItem>) {
+    fun getSubtotal(): Money? {
+        return if (cartItems.isNotEmpty()) {
+            val currency = cartItems[0].money.currencySymbol
+            var subtotal = 0.0
+            cartItems.forEach {
+                subtotal += it.money.amount * it.quantity
+            }
+            Money(subtotal, currency)
+        } else {
+            null
+        }
+    }
+
+    fun getNumberOfItems(): Int {
+        return cartItems.sumOf { it.quantity }
+    }
+}
+```
+
+## What's Next?
+
+<Card title="Quick Start" icon="rocket" href="/quickstart">
+  Get the project running on your machine in minutes
+</Card>

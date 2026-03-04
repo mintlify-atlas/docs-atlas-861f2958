@@ -1,0 +1,170 @@
+---
+title: Testing Overview
+description: Comprehensive testing strategy and coverage across all layers of the Real Clean Architecture
+---
+
+The Real Clean Architecture project follows a comprehensive testing strategy that ensures reliability and maintainability across all layers. Tests are written using Kotlin Multiplatform-compatible testing frameworks and custom utilities.
+
+## Testing Philosophy
+
+The testing approach in this project emphasizes:
+
+- **Layer-specific testing**: Each layer (Domain, Data, Presentation) has dedicated tests
+- **Dependency isolation**: Use of test doubles and mocks to isolate units under test
+- **Real implementations**: Tests use actual business logic, not mocked behavior
+- **Flow testing**: Custom utilities for testing Kotlin Flows and coroutines
+
+## Test Coverage
+
+The project maintains comprehensive test coverage across:
+
+<CardGroup cols={3}>
+  <Card title="Use Cases" icon="gear" href="/testing/unit-tests#use-case-tests">
+    Domain layer business logic testing
+  </Card>
+  <Card title="Repositories" icon="database" href="/testing/unit-tests#repository-tests">
+    Data layer integration testing
+  </Card>
+  <Card title="ViewModels" icon="window" href="/testing/unit-tests#viewmodel-tests">
+    Presentation layer state management testing
+  </Card>
+</CardGroup>
+
+## Testing Framework
+
+### Kotlin Test
+
+All tests use `kotlin.test` for Kotlin Multiplatform compatibility:
+
+```kotlin
+import kotlin.test.*
+
+class ExampleTest {
+    @Test
+    fun `EXPECT expected behavior WHEN condition`() {
+        // Arrange
+        val input = "test"
+        
+        // Act
+        val result = performAction(input)
+        
+        // Assert
+        assertEquals(expected, result)
+    }
+}
+```
+
+### Test Naming Convention
+
+Tests follow a clear naming pattern:
+
+```
+`EXPECT <expected outcome> WHEN <condition>`
+```
+
+This format makes test intent immediately clear and improves readability.
+
+## Test Utilities
+
+The project includes custom test utilities to simplify testing:
+
+<CardGroup cols={3}>
+  <Card title="cache-test" icon="memory" href="/testing/test-utilities#cache-test">
+    In-memory cache for testing
+  </Card>
+  <Card title="coroutines-test-dispatcher" icon="clock" href="/testing/test-utilities#coroutines-test-dispatcher">
+    Main dispatcher testing rule
+  </Card>
+  <Card title="flow-test-observer" icon="stream" href="/testing/test-utilities#flow-test-observer">
+    Flow emission observer utility
+  </Card>
+</CardGroup>
+
+## Test Structure
+
+Tests are organized alongside their production code in Kotlin Multiplatform modules:
+
+```
+module/
+├── src/
+│   ├── commonMain/kotlin/      # Production code
+│   └── commonTest/kotlin/      # Common tests (KMP)
+├── android/
+│   └── src/test/java/          # Android-specific tests
+```
+
+## Running Tests
+
+<Steps>
+  <Step title="Run all tests">
+    ```bash
+    ./gradlew test
+    ```
+  </Step>
+  <Step title="Run module-specific tests">
+    ```bash
+    ./gradlew :cart-component:test
+    ```
+  </Step>
+  <Step title="Run with coverage">
+    ```bash
+    ./gradlew testDebugUnitTest jacocoTestReport
+    ```
+  </Step>
+</Steps>
+
+## Test Doubles
+
+The project uses simple test implementations rather than mocking frameworks:
+
+```kotlin
+private class TestRepository : Repository {
+    val invocations = mutableListOf<String>()
+    var returnValue: Result = Result.Success
+    
+    override fun performAction(id: String): Result {
+        invocations.add(id)
+        return returnValue
+    }
+}
+```
+
+This approach provides:
+- **Clarity**: Test doubles are easy to understand
+- **Flexibility**: Full control over behavior
+- **Simplicity**: No framework dependencies
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Write focused tests">
+    Each test should verify a single behavior or outcome. Keep tests small and focused.
+  </Accordion>
+  
+  <Accordion title="Use descriptive names">
+    Follow the naming convention to make test intent clear without reading the code.
+  </Accordion>
+  
+  <Accordion title="Avoid test interdependence">
+    Tests should be independent and runnable in any order.
+  </Accordion>
+  
+  <Accordion title="Test edge cases">
+    Include tests for error conditions, empty states, and boundary values.
+  </Accordion>
+  
+  <Accordion title="Use test utilities">
+    Leverage the provided test utilities for consistent, maintainable tests.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Unit Tests" icon="vial" href="/testing/unit-tests">
+    Explore real test examples from the codebase
+  </Card>
+  <Card title="Test Utilities" icon="wrench" href="/testing/test-utilities">
+    Learn about custom testing tools
+  </Card>
+</CardGroup>

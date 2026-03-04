@@ -1,0 +1,381 @@
+---
+title: 'ViewModels'
+description: 'Presentation layer ViewModels for managing UI state'
+---
+
+# ViewModels
+
+ViewModels in the presentation layer manage UI state and business logic for screens. Each ViewModel implements the `StateViewModel` interface and follows the delegation pattern.
+
+## CartViewModel
+
+Manages cart screen state and cart item updates.
+
+**File:** `cart-ui/src/main/java/com/denisbrandi/androidrealca/cart/presentation/viewmodel/CartViewModel.kt`
+
+### Interface
+
+```kotlin
+internal interface CartViewModel : StateViewModel<CartScreenState> {
+    fun updateCartItemQuantity(cartItem: CartItem)
+}
+```
+
+### State
+
+<ResponseField name="CartScreenState" type="data class">
+  The state model for the cart screen.
+  
+  <ResponseField name="cart" type="Cart" required>
+    The current user's cart containing all cart items.
+  </ResponseField>
+</ResponseField>
+
+### Methods
+
+<ParamField path="updateCartItemQuantity" type="function">
+  Updates the quantity of a cart item.
+  
+  <ParamField body="cartItem" type="CartItem" required>
+    The cart item with updated quantity.
+  </ParamField>
+</ParamField>
+
+### Implementation
+
+**File:** `cart-ui/src/main/java/com/denisbrandi/androidrealca/cart/presentation/viewmodel/RealCartViewModel.kt`
+
+```kotlin
+internal class RealCartViewModel(
+    observeUserCart: ObserveUserCart,
+    private val updateCartItem: UpdateCartItem,
+    private val stateDelegate: StateDelegate<CartScreenState>
+) : CartViewModel, StateViewModel<CartScreenState> by stateDelegate, ViewModel()
+```
+
+**Dependencies:**
+- `observeUserCart: ObserveUserCart` - Use case to observe user's cart changes
+- `updateCartItem: UpdateCartItem` - Use case to update cart items
+- `stateDelegate: StateDelegate<CartScreenState>` - Delegate for state management
+
+---
+
+## MainViewModel
+
+Manages the main screen state including navigation badges for wishlist and cart.
+
+**File:** `main-ui/src/main/java/com/denisbrandi/androidrealca/main/presentation/viewmodel/MainViewModel.kt`
+
+### Interface
+
+```kotlin
+internal interface MainViewModel : StateViewModel<MainScreenState>
+```
+
+### State
+
+<ResponseField name="MainScreenState" type="data class">
+  The state model for the main screen with navigation badges.
+  
+  <ResponseField name="wishlistBadge" type="Int" default="0">
+    The count of items in the wishlist, displayed as a badge.
+  </ResponseField>
+  
+  <ResponseField name="cartBadge" type="Int" default="0">
+    The count of items in the cart, displayed as a badge.
+  </ResponseField>
+</ResponseField>
+
+### Implementation
+
+**File:** `main-ui/src/main/java/com/denisbrandi/androidrealca/main/presentation/viewmodel/RealMainViewModel.kt`
+
+```kotlin
+internal class RealMainViewModel(
+    observeUserWishlistIds: ObserveUserWishlistIds,
+    observeUserCart: ObserveUserCart,
+    stateDelegate: StateDelegate<MainScreenState>
+) : MainViewModel, StateViewModel<MainScreenState> by stateDelegate, ViewModel()
+```
+
+**Dependencies:**
+- `observeUserWishlistIds: ObserveUserWishlistIds` - Use case to observe wishlist items
+- `observeUserCart: ObserveUserCart` - Use case to observe cart items
+- `stateDelegate: StateDelegate<MainScreenState>` - Delegate for state management
+
+---
+
+## LoginViewModel
+
+Manages login screen state and authentication flow with both state and events.
+
+**File:** `onboarding-ui/src/main/java/com/denisbrandi/androidrealca/onboarding/presentation/viewmodel/LoginViewModel.kt`
+
+### Interface
+
+```kotlin
+internal interface LoginViewModel : StateViewModel<LoginScreenState>, EventViewModel<LoginScreenEvent> {
+    fun login(email: String, password: String)
+}
+```
+
+### State
+
+<ResponseField name="LoginScreenState" type="data class">
+  The state model for the login screen.
+  
+  <ResponseField name="displayState" type="DisplayState" required>
+    The current display state of the login form.
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="DisplayState" type="sealed interface">
+  Represents the display state of the login screen.
+  
+  <ResponseField name="Form" type="data object">
+    Display the login form.
+  </ResponseField>
+  
+  <ResponseField name="LoggingIn" type="data object">
+    Display loading state during login.
+  </ResponseField>
+</ResponseField>
+
+### Events
+
+<ResponseField name="LoginScreenEvent" type="sealed interface">
+  One-time events emitted by the login screen.
+  
+  <ResponseField name="ShowError" type="data class">
+    Show a login error to the user.
+    
+    <ResponseField name="loginError" type="LoginError" required>
+      The specific error that occurred during login.
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="SuccessfulLogin" type="data object">
+    Login completed successfully.
+  </ResponseField>
+</ResponseField>
+
+### Methods
+
+<ParamField path="login" type="function">
+  Initiates the login process with provided credentials.
+  
+  <ParamField body="email" type="String" required>
+    The user's email address.
+  </ParamField>
+  
+  <ParamField body="password" type="String" required>
+    The user's password.
+  </ParamField>
+</ParamField>
+
+### Implementation
+
+**File:** `onboarding-ui/src/main/java/com/denisbrandi/androidrealca/onboarding/presentation/viewmodel/RealLoginViewModel.kt`
+
+```kotlin
+internal class RealLoginViewModel(
+    private val login: Login,
+    private val stateDelegate: StateDelegate<LoginScreenState>,
+    private val eventDelegate: EventDelegate<LoginScreenEvent>
+) : LoginViewModel,
+    StateViewModel<LoginScreenState> by stateDelegate,
+    EventViewModel<LoginScreenEvent> by eventDelegate,
+    ViewModel()
+```
+
+**Dependencies:**
+- `login: Login` - Use case to perform login authentication
+- `stateDelegate: StateDelegate<LoginScreenState>` - Delegate for state management
+- `eventDelegate: EventDelegate<LoginScreenEvent>` - Delegate for event management
+
+---
+
+## PLPViewModel
+
+Manages the Product Listing Page (PLP) screen state, product loading, and wishlist/cart operations.
+
+**File:** `plp-ui/src/main/java/com/denisbrandi/androidrealca/plp/presentation/viewmodel/PLPViewModel.kt`
+
+### Interface
+
+```kotlin
+internal interface PLPViewModel : StateViewModel<PLPScreenState> {
+    fun loadProducts()
+    fun isFavourite(productId: String): Boolean
+    fun addProductToWishlist(product: Product)
+    fun removeProductFromWishlist(productId: String)
+    fun addProductToCart(product: Product)
+}
+```
+
+### State
+
+<ResponseField name="PLPScreenState" type="data class">
+  The state model for the product listing page.
+  
+  <ResponseField name="fullName" type="String" required>
+    The user's full name to display in the greeting.
+  </ResponseField>
+  
+  <ResponseField name="wishlistIds" type="List<String>" default="emptyList()">
+    List of product IDs currently in the wishlist.
+  </ResponseField>
+  
+  <ResponseField name="displayState" type="DisplayState?" default="null">
+    The current display state of the product list.
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="DisplayState" type="sealed interface">
+  Represents the display state of the product listing.
+  
+  <ResponseField name="Loading" type="data object">
+    Products are being loaded.
+  </ResponseField>
+  
+  <ResponseField name="Error" type="data object">
+    An error occurred while loading products.
+  </ResponseField>
+  
+  <ResponseField name="Content" type="data class">
+    Products loaded successfully.
+    
+    <ResponseField name="products" type="List<Product>" required>
+      The list of products to display.
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Methods
+
+<ParamField path="loadProducts" type="function">
+  Loads the list of products from the repository.
+</ParamField>
+
+<ParamField path="isFavourite" type="function">
+  Checks if a product is in the user's wishlist.
+  
+  <ParamField body="productId" type="String" required>
+    The ID of the product to check.
+  </ParamField>
+  
+  Returns `Boolean` - true if the product is in the wishlist.
+</ParamField>
+
+<ParamField path="addProductToWishlist" type="function">
+  Adds a product to the user's wishlist.
+  
+  <ParamField body="product" type="Product" required>
+    The product to add to the wishlist.
+  </ParamField>
+</ParamField>
+
+<ParamField path="removeProductFromWishlist" type="function">
+  Removes a product from the user's wishlist.
+  
+  <ParamField body="productId" type="String" required>
+    The ID of the product to remove.
+  </ParamField>
+</ParamField>
+
+<ParamField path="addProductToCart" type="function">
+  Adds a product to the user's cart with quantity 1.
+  
+  <ParamField body="product" type="Product" required>
+    The product to add to the cart.
+  </ParamField>
+</ParamField>
+
+### Implementation
+
+**File:** `plp-ui/src/main/java/com/denisbrandi/androidrealca/plp/presentation/viewmodel/RealPLPViewModel.kt`
+
+```kotlin
+internal class RealPLPViewModel(
+    getUser: GetUser,
+    private val getProducts: GetProducts,
+    observeUserWishlistIds: ObserveUserWishlistIds,
+    private val addToWishlist: AddToWishlist,
+    private val removeFromWishlist: RemoveFromWishlist,
+    private val addCartItem: AddCartItem,
+    private val stateDelegate: StateDelegate<PLPScreenState>
+) : PLPViewModel, StateViewModel<PLPScreenState> by stateDelegate, ViewModel()
+```
+
+**Dependencies:**
+- `getUser: GetUser` - Use case to get current user information
+- `getProducts: GetProducts` - Use case to fetch product list
+- `observeUserWishlistIds: ObserveUserWishlistIds` - Use case to observe wishlist changes
+- `addToWishlist: AddToWishlist` - Use case to add items to wishlist
+- `removeFromWishlist: RemoveFromWishlist` - Use case to remove items from wishlist
+- `addCartItem: AddCartItem` - Use case to add items to cart
+- `stateDelegate: StateDelegate<PLPScreenState>` - Delegate for state management
+
+---
+
+## WishlistViewModel
+
+Manages wishlist screen state and wishlist item operations.
+
+**File:** `wishlist-ui/src/main/java/com/denisbrandi/androidrealca/wishlist/presentation/viewmodel/WishlistViewModel.kt`
+
+### Interface
+
+```kotlin
+internal interface WishlistViewModel : StateViewModel<WishlistScreenState> {
+    fun removeItemFromWishlist(wishlistItemId: String)
+    fun addProductToCart(wishlistItem: WishlistItem)
+}
+```
+
+### State
+
+<ResponseField name="WishlistScreenState" type="data class">
+  The state model for the wishlist screen.
+  
+  <ResponseField name="wishlistItems" type="List<WishlistItem>" default="emptyList()">
+    The list of items currently in the user's wishlist.
+  </ResponseField>
+</ResponseField>
+
+### Methods
+
+<ParamField path="removeItemFromWishlist" type="function">
+  Removes an item from the user's wishlist.
+  
+  <ParamField body="wishlistItemId" type="String" required>
+    The ID of the wishlist item to remove.
+  </ParamField>
+</ParamField>
+
+<ParamField path="addProductToCart" type="function">
+  Adds a wishlist item to the cart with quantity 1.
+  
+  <ParamField body="wishlistItem" type="WishlistItem" required>
+    The wishlist item to add to the cart.
+  </ParamField>
+</ParamField>
+
+### Implementation
+
+**File:** `wishlist-ui/src/main/java/com/denisbrandi/androidrealca/wishlist/presentation/viewmodel/RealWishlistViewModel.kt`
+
+```kotlin
+internal class RealWishlistViewModel(
+    observeUserWishlist: ObserveUserWishlist,
+    private val removeFromWishlist: RemoveFromWishlist,
+    private val addCartItem: AddCartItem,
+    private val stateDelegate: StateDelegate<WishlistScreenState>
+) : WishlistViewModel, StateViewModel<WishlistScreenState> by stateDelegate, ViewModel()
+```
+
+**Dependencies:**
+- `observeUserWishlist: ObserveUserWishlist` - Use case to observe wishlist changes
+- `removeFromWishlist: RemoveFromWishlist` - Use case to remove items from wishlist
+- `addCartItem: AddCartItem` - Use case to add items to cart
+- `stateDelegate: StateDelegate<WishlistScreenState>` - Delegate for state management

@@ -1,0 +1,214 @@
+---
+title: Repositories
+description: Reference of all repository interfaces in the domain layer
+---
+
+Repositories define the contract for data access. They are implemented in the data layer and used by use cases in the domain layer.
+
+## CartRepository
+
+Manages shopping cart data persistence and retrieval.
+
+**Source:** `cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/repository/CartRepository.kt:6`
+
+```kotlin
+internal interface CartRepository {
+    fun updateCartItem(userId: String, cartItem: CartItem)
+    fun observeCart(userId: String): Flow<Cart>
+    fun getCart(userId: String): Cart
+}
+```
+
+### updateCartItem
+
+Updates or adds a cart item for a specific user.
+
+<ParamField path="userId" type="String" required>
+  The ID of the user
+</ParamField>
+
+<ParamField path="cartItem" type="CartItem" required>
+  The cart item to update or add
+</ParamField>
+
+**Returns:** `Unit`
+
+---
+
+### observeCart
+
+Observes cart changes for a specific user.
+
+<ParamField path="userId" type="String" required>
+  The ID of the user
+</ParamField>
+
+**Returns:** `Flow<Cart>` - A flow emitting cart updates
+
+<ResponseField name="Flow<Cart>" type="Flow<Cart>">
+  Reactive stream of cart state changes
+</ResponseField>
+
+---
+
+### getCart
+
+Retrieves the current cart snapshot for a user.
+
+<ParamField path="userId" type="String" required>
+  The ID of the user
+</ParamField>
+
+**Returns:** `Cart` - The current cart state
+
+<ResponseField name="Cart" type="Cart">
+  Current cart with all items
+</ResponseField>
+
+---
+
+## ProductRepository
+
+Manages product data retrieval.
+
+**Source:** `product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/domain/repository/ProductRepository.kt:6`
+
+```kotlin
+internal interface ProductRepository {
+    suspend fun getProducts(): Answer<List<Product>, Unit>
+}
+```
+
+### getProducts
+
+Retrieves all available products.
+
+**Returns:** `Answer<List<Product>, Unit>` - Success with products or error
+
+<ResponseField name="Success" type="List<Product>">
+  List of all available products
+</ResponseField>
+
+<ResponseField name="Error" type="Unit">
+  Generic error state
+</ResponseField>
+
+---
+
+## UserRepository
+
+Manages user authentication and user data.
+
+**Source:** `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/repository/UserRepository.kt:6`
+
+```kotlin
+internal interface UserRepository {
+    suspend fun login(loginRequest: LoginRequest): Answer<Unit, LoginError>
+    fun getUser(): User
+    fun isLoggedIn(): Boolean
+}
+```
+
+### login
+
+Authenticates a user with the provided credentials.
+
+<ParamField path="loginRequest" type="LoginRequest" required>
+  Login credentials (email and password)
+</ParamField>
+
+**Returns:** `Answer<Unit, LoginError>` - Success or specific login error
+
+<ResponseField name="Success" type="Unit">
+  Authentication successful
+</ResponseField>
+
+<ResponseField name="Error" type="LoginError">
+  One of: InvalidEmail, InvalidPassword, GenericError, IncorrectCredentials
+</ResponseField>
+
+---
+
+### getUser
+
+Retrieves the currently authenticated user.
+
+**Returns:** `User` - The current user
+
+<ResponseField name="User" type="User">
+  Current authenticated user data
+</ResponseField>
+
+---
+
+### isLoggedIn
+
+Checks if a user is currently authenticated.
+
+**Returns:** `Boolean` - True if user is logged in
+
+<ResponseField name="Boolean" type="Boolean">
+  Authentication status
+</ResponseField>
+
+---
+
+## WishlistRepository
+
+Manages user wishlist data.
+
+**Source:** `wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/repository/WishlistRepository.kt:6`
+
+```kotlin
+internal interface WishlistRepository {
+    fun addToWishlist(userId: String, wishlistItem: WishlistItem)
+    fun removeFromWishlist(userId: String, wishlistItemId: String)
+    fun observeWishlist(userId: String): Flow<List<WishlistItem>>
+}
+```
+
+### addToWishlist
+
+Adds an item to a user's wishlist.
+
+<ParamField path="userId" type="String" required>
+  The ID of the user
+</ParamField>
+
+<ParamField path="wishlistItem" type="WishlistItem" required>
+  The item to add to the wishlist
+</ParamField>
+
+**Returns:** `Unit`
+
+---
+
+### removeFromWishlist
+
+Removes an item from a user's wishlist.
+
+<ParamField path="userId" type="String" required>
+  The ID of the user
+</ParamField>
+
+<ParamField path="wishlistItemId" type="String" required>
+  The ID of the item to remove
+</ParamField>
+
+**Returns:** `Unit`
+
+---
+
+### observeWishlist
+
+Observes wishlist changes for a specific user.
+
+<ParamField path="userId" type="String" required>
+  The ID of the user
+</ParamField>
+
+**Returns:** `Flow<List<WishlistItem>>` - A flow emitting wishlist updates
+
+<ResponseField name="Flow<List<WishlistItem>>" type="Flow<List<WishlistItem>>">
+  Reactive stream of wishlist state changes
+</ResponseField>

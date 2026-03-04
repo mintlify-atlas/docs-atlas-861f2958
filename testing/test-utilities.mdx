@@ -1,0 +1,413 @@
+---
+title: Test Utilities
+description: Custom testing utilities for cache, coroutines, and Flow testing
+---
+
+The Real Clean Architecture project includes three custom test utility modules that simplify testing across all layers:
+
+<CardGroup cols={3}>
+  <Card title="cache-test" icon="memory">
+    In-memory cache implementation
+  </Card>
+  <Card title="coroutines-test-dispatcher" icon="clock">
+    Main dispatcher testing rule
+  </Card>
+  <Card title="flow-test-observer" icon="stream">
+    Flow emission observer
+  </Card>
+</CardGroup>
+
+## cache-test
+
+Provides in-memory implementations of cache interfaces for testing without file system dependencies.
+
+### TestCacheProvider
+
+A test implementation of `CacheProvider` that creates in-memory cached objects:
+
+```kotlin cache-test/src/commonMain/kotlin/TestCacheProvider.kt
+package com.denisbrandi.androidrealca.cache.test
+
+import com.denisbrandi.androidrealca.cache.*
+import kotlinx.serialization.KSerializer
+
+class TestCacheProvider(
+    private val expectedFileName: String,
+    private val expectedDefaultValue: Any
+) : CacheProvider {
+
+    lateinit var providedCachedObject: InMemoryCachedObject<*>
+
+    override fun <T : Any> getCachedObject(
+        fileName: String,
+        serializer: KSerializer<T>,
+        defaultValue: T
+    ): CachedObject<T> {
+        return if (expectedFileName == fileName && expectedDefaultValue == defaultValue) {
+            InMemoryCachedObject(defaultValue).also {
+                providedCachedObject = it
+            }
+        } else {
+            throw IllegalStateException("getCachedObject not stubbed")
+        }
+    }
+
+    override fun <T : Any> getFlowCachedObject(
+        fileName: String,
+        serializer: KSerializer<T>,
+        defaultValue: T
+    ): FlowCachedObject<T> {
+        return RealFlowCachedObject(getCachedObject(fileName, serializer, defaultValue))
+    }
+}
+```
+
+**Key Features:**
+- Validates expected file name and default value
+- Exposes `providedCachedObject` for verification
+- Throws exception if cache parameters don't match expectations
+
+### InMemoryCachedObject
+
+A simple in-memory implementation of `CachedObject`:
+
+```kotlin cache-test/src/commonMain/kotlin/InMemoryCachedObject.kt
+package com.denisbrandi.androidrealca.cache.test
+
+import com.denisbrandi.androidrealca.cache.CachedObject
+
+class InMemoryCachedObject<T : Any>(
+    defaultValue: T
+) : CachedObject<T> {
+
+    private var cachedValue = defaultValue
+
+    override fun put(value: T) {
+        cachedValue = value
+    }
+
+    override fun get(): T {
+        return cachedValue
+    }
+}
+```
+
+**Key Features:**
+- Stores value in memory instead of file system
+- Initialized with default value
+- Simple get/put interface
+
+### Usage Example
+
+```kotlin
+class RealWishlistRepositoryTest {
+
+    private val cacheProvider = TestCacheProvider(
+        "wishlist-cache",
+        JsonWishlistCacheDto(emptyMap())
+    )
+    private val sut = RealWishlistRepository(cacheProvider)
+
+    @Test
+    fun `EXPECT data saved and wishlist updates emitted`() {
+        val wishlistObserver = sut.observeWishlist(USER_ID).test()
+
+        sut.addToWishlist(USER_ID, WISHLIST_ITEM)
+
+        assertEquals(
+            listOf(emptyList(), listOf(WISHLIST_ITEM)),
+            wishlistObserver.getValues()
+        )
+    }
+}
+```
+
+<Tip>
+Access `cacheProvider.providedCachedObject.get()` to verify the cached value after operations.
+</Tip>
+
+## coroutines-test-dispatcher
+
+Provides a JUnit rule for testing Android ViewModels that use coroutines and the main dispatcher.
+
+### MainCoroutineRule
+
+```kotlin coroutines-test-dispatcher/src/main/java/MainCoroutineRule.kt
+@file:OptIn(ExperimentalCoroutinesApi::class)
+
+package com.denisbrandi.androidrealca.coroutines.testdispatcher
+
+import kotlinx.coroutines.*
+import kotlinx.coroutines.test.*
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
+
+class MainCoroutineRule : TestWatcher() {
+
+    private val testDispatcher = UnconfinedTestDispatcher()
+
+    override fun starting(description: Description?) {
+        Dispatchers.setMain(testDispatcher)
+    }
+
+    override fun finished(description: Description?) {
+        Dispatchers.resetMain()
+    }
+}
+```
+
+**Key Features:**
+- Sets up `UnconfinedTestDispatcher` as the main dispatcher
+- Automatically resets the main dispatcher after tests
+- Extends `TestWatcher` for automatic lifecycle management
+
+### Usage Example
+
+```kotlin
+class RealCartViewModelTest {
+
+    @get:Rule
+    val rule = MainCoroutineRule()
+
+    private val observeUserCart = TestObserveUserCart()
+    private val updateCartItem = TestUpdateCartItem()
+    private lateinit var sut: RealCartViewModel
+    private lateinit var stateObserver: FlowTestObserver<CartScreenState>
+
+    @Before
+    fun setUp() {
+        sut = RealCartViewModel(observeUserCart, updateCartItem, StateDelegate())
+        stateObserver = sut.state.test()
+    }
+
+    @Test
+    fun `EXPECT cart updates`() = runTest {
+        observeUserCart.cartUpdates.emit(CART)
+
+        assertEquals(
+            listOf(
+                CartScreenState(Cart(emptyList())),
+                CartScreenState(CART)
+            ),
+            stateObserver.getValues()
+        )
+    }
+}
+```
+
+<Note>
+Use `@get:Rule` annotation to apply the rule to all tests in the class. The rule automatically sets up and tears down the test dispatcher.
+</Note>
+
+### Why UnconfinedTestDispatcher?
+
+The `UnconfinedTestDispatcher` executes coroutines eagerly and synchronously, which is ideal for testing:
+
+- Coroutines run immediately without delays
+- No need to advance time manually
+- Simpler test code
+
+## flow-test-observer
+
+Provides utilities for testing Kotlin Flows by collecting emissions for verification.
+
+### FlowTestObserver
+
+```kotlin flow-test-observer/src/commonMain/kotlin/FlowTestObserver.kt
+@file:OptIn(ExperimentalCoroutinesApi::class)
+
+package com.denisbrandi.androidrealca.flow.testobserver
+
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+
+class FlowTestObserver<T : Any>(
+    private val flow: Flow<T>,
+    coroutineScope: CoroutineScope
+) {
+    private val emittedValues = mutableListOf<T>()
+    private val job: Job = flow.onEach {
+        emittedValues.add(it)
+    }.launchIn(coroutineScope)
+
+    fun getValues() = emittedValues
+
+    fun stopObserving() {
+        job.cancel()
+    }
+
+    fun getFlow() = flow
+}
+
+fun <T : Any> Flow<T>.test(coroutineScope: CoroutineScope = CoroutineScope(UnconfinedTestDispatcher())) =
+    FlowTestObserver(this, coroutineScope)
+```
+
+**Key Features:**
+- Collects all values emitted by a Flow
+- Provides `getValues()` to retrieve collected emissions
+- Supports custom coroutine scope or uses default `UnconfinedTestDispatcher`
+- Can be stopped with `stopObserving()`
+
+### Extension Function
+
+The `.test()` extension function simplifies creating observers:
+
+```kotlin
+val observer = myFlow.test()
+```
+
+Optionally pass a custom scope:
+
+```kotlin
+val observer = myFlow.test(testScope)
+```
+
+### Usage Example
+
+```kotlin
+class RealWishlistRepositoryTest {
+
+    private val cacheProvider = TestCacheProvider(
+        "wishlist-cache",
+        JsonWishlistCacheDto(emptyMap())
+    )
+    private val sut = RealWishlistRepository(cacheProvider)
+
+    @Test
+    fun `EXPECT data removed WHEN item to remove is in wishlist`() {
+        val wishlistObserver = sut.observeWishlist(USER_ID).test()
+        sut.addToWishlist(USER_ID, WISHLIST_ITEM)
+
+        sut.removeFromWishlist(USER_ID, WISHLIST_ITEM.id)
+
+        assertEquals(
+            listOf(
+                emptyList(),
+                listOf(WISHLIST_ITEM),
+                emptyList()
+            ),
+            wishlistObserver.getValues()
+        )
+    }
+}
+```
+
+<Tip>
+The observer captures all emissions including the initial value, making it easy to verify the complete sequence of state updates.
+</Tip>
+
+### ViewModel Testing Example
+
+```kotlin
+class RealWishlistViewModelTest {
+
+    @get:Rule
+    val rule = MainCoroutineRule()
+
+    private val observeUserWishlist = TestObserveUserWishlist()
+    private lateinit var sut: RealWishlistViewModel
+    private lateinit var stateObserver: FlowTestObserver<WishlistScreenState>
+
+    @Before
+    fun setUp() {
+        sut = RealWishlistViewModel(
+            observeUserWishlist,
+            removeFromWishlist,
+            addCartItem,
+            StateDelegate()
+        )
+        stateObserver = sut.state.test()
+    }
+
+    @Test
+    fun `EXPECT wishlist updates`() = runTest {
+        observeUserWishlist.wishlistUpdates.emit(WISHLIST_ITEMS)
+
+        assertEquals(
+            listOf(
+                WishlistScreenState(emptyList()),
+                WishlistScreenState(WISHLIST_ITEMS)
+            ),
+            stateObserver.getValues()
+        )
+    }
+}
+```
+
+## Combined Usage
+
+These utilities work together seamlessly:
+
+```kotlin
+class MyViewModelTest {
+
+    @get:Rule
+    val rule = MainCoroutineRule()  // Set up test dispatcher
+
+    private val cacheProvider = TestCacheProvider("cache", defaultValue)  // In-memory cache
+    private val repository = RealRepository(cacheProvider)
+    private val useCase = MyUseCase(repository)
+    private lateinit var sut: MyViewModel
+    private lateinit var stateObserver: FlowTestObserver<MyState>  // Observe state
+
+    @Before
+    fun setUp() {
+        sut = MyViewModel(useCase)
+        stateObserver = sut.state.test()  // Start observing
+    }
+
+    @Test
+    fun `EXPECT state updates WHEN action performed`() = runTest {
+        sut.performAction()
+
+        assertEquals(expectedStates, stateObserver.getValues())
+    }
+}
+```
+
+<AccordionGroup>
+  <Accordion title="When to use TestCacheProvider">
+    Use `TestCacheProvider` when testing repositories or use cases that interact with cached data. It eliminates file system dependencies and allows verification of cached values.
+  </Accordion>
+  
+  <Accordion title="When to use MainCoroutineRule">
+    Use `MainCoroutineRule` in Android ViewModel tests (JUnit 4) where code uses `Dispatchers.Main`. It ensures coroutines run synchronously in tests.
+  </Accordion>
+  
+  <Accordion title="When to use FlowTestObserver">
+    Use `FlowTestObserver` whenever testing code that emits values via Flow. It captures all emissions for easy assertion. Works in both KMP common tests and Android tests.
+  </Accordion>
+  
+  <Accordion title="Can I use these in production code?">
+    No, these utilities are test-only. They live in separate modules (ending with `-test`) and should only be included as `testImplementation` dependencies.
+  </Accordion>
+</AccordionGroup>
+
+## Adding Dependencies
+
+To use these utilities in your tests:
+
+```gradle build.gradle.kts
+dependencies {
+    // For cache testing
+    testImplementation(projects.cacheTest)
+    
+    // For Android ViewModel testing with coroutines
+    testImplementation(projects.coroutinesTestDispatcher)
+    
+    // For Flow testing (works in common tests too)
+    testImplementation(projects.flowTestObserver)
+}
+```
+
+<Note>
+The `flow-test-observer` is Kotlin Multiplatform compatible and can be used in `commonTest`. The `coroutines-test-dispatcher` is Android-specific (JUnit 4).
+</Note>
+
+## Next Steps
+
+<Card title="Unit Tests" icon="vial" href="/testing/unit-tests">
+  See these utilities in action with real test examples
+</Card>

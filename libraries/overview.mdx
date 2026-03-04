@@ -1,0 +1,93 @@
+---
+title: Library Modules Overview
+description: Foundation library modules providing core functionality for the Real Clean Architecture Android project
+---
+
+The Real Clean Architecture project includes several library modules that provide reusable functionality across different layers of the application. These libraries are built with Kotlin Multiplatform, supporting JVM, iOS (x64, arm64, and simulator arm64).
+
+## Core Libraries
+
+<CardGroup cols={2}>
+  <Card title="Cache" icon="database" href="/libraries/cache">
+    Persistent storage abstraction with Flow support for reactive caching
+  </Card>
+  <Card title="HTTP Client" icon="cloud" href="/libraries/httpclient">
+    Ktor-based HTTP client configuration with JSON serialization
+  </Card>
+  <Card title="ViewModel" icon="layer-group" href="/libraries/viewmodel">
+    State and event management utilities for presentation layer
+  </Card>
+  <Card title="Foundations" icon="code" href="/libraries/foundations">
+    Core language extensions including the Answer type for error handling
+  </Card>
+</CardGroup>
+
+## Testing Libraries
+
+The project also includes dedicated testing utilities:
+
+<CardGroup cols={3}>
+  <Card title="cache-test" icon="vial">
+    In-memory cache implementations for testing
+  </Card>
+  <Card title="flow-test-observer" icon="microscope">
+    Flow testing utilities with value observation
+  </Card>
+  <Card title="coroutines-test-dispatcher" icon="flask">
+    JUnit rule for coroutine testing with test dispatchers
+  </Card>
+</CardGroup>
+
+## Multiplatform Support
+
+All library modules are configured with Kotlin Multiplatform, supporting:
+
+- **JVM** (toolchain 17)
+- **iOS x64**
+- **iOS arm64**
+- **iOS Simulator arm64**
+
+This enables code sharing between Android and iOS platforms while maintaining platform-specific implementations where needed.
+
+## Module Dependencies
+
+The libraries have minimal dependencies and can be used independently:
+
+<Steps>
+  <Step title="Foundations">
+    No external dependencies - pure Kotlin abstractions
+  </Step>
+  <Step title="Cache">
+    Depends on kotlinx.serialization and multiplatform-settings
+  </Step>
+  <Step title="ViewModel">
+    Depends only on kotlinx.coroutines
+  </Step>
+  <Step title="HTTP Client">
+    Depends on Ktor client libraries
+  </Step>
+</Steps>
+
+## Design Principles
+
+<AccordionGroup>
+  <Accordion title="Interface-based Design">
+    All libraries expose interfaces (`CacheProvider`, `HttpClientProvider`) allowing easy testing and implementation swapping.
+  </Accordion>
+  
+  <Accordion title="Immutability">
+    Libraries favor immutable data structures and functional approaches (e.g., `Answer` type).
+  </Accordion>
+  
+  <Accordion title="Reactive Support">
+    Built-in support for Kotlin Flows for reactive programming patterns.
+  </Accordion>
+  
+  <Accordion title="Testing Support">
+    Each library includes dedicated test utilities and in-memory implementations.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  These libraries follow Clean Architecture principles by providing abstractions that can be used across different layers without creating circular dependencies.
+</Note>

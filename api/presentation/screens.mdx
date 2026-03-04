@@ -1,0 +1,307 @@
+---
+title: 'Compose Screens'
+description: 'Jetpack Compose UI screens for the presentation layer'
+---
+
+# Compose Screens
+
+Compose screens are UI components built with Jetpack Compose that observe ViewModels and render the UI state.
+
+## CartScreen
+
+Displays the user's shopping cart with the ability to update item quantities.
+
+**File:** `cart-ui/src/main/java/com/denisbrandi/androidrealca/cart/presentation/view/CartScreen.kt`
+
+### Composable Function
+
+```kotlin
+@Composable
+internal fun CartScreen(
+    cartViewModel: CartViewModel
+)
+```
+
+<ParamField path="cartViewModel" type="CartViewModel" required>
+  The ViewModel that manages cart state and operations.
+</ParamField>
+
+### Features
+
+- Displays a list of cart items with product images, names, and prices
+- Shows quantity controls (+ and -) for each cart item
+- Displays cart subtotal at the bottom of the screen
+- Shows "Cart is empty" message when no items are present
+- Uses `LazyColumn` for efficient rendering of cart items
+
+### UI Components
+
+- **TopBar:** Displays "Cart" title
+- **CartItemRow:** Individual cart item card with image, details, and quantity controls
+- **CartSubTotal:** Fixed bottom section showing the total price
+
+### State Observation
+
+```kotlin
+val cartState by cartViewModel.state.collectAsState()
+```
+
+Observes `CartScreenState` from the ViewModel to reactively update the UI.
+
+---
+
+## MainScreen
+
+The main navigation screen with bottom navigation bar for Products, Wishlist, and Cart.
+
+**File:** `main-ui/src/main/java/com/denisbrandi/androidrealca/main/presentation/view/MainScreen.kt`
+
+### Composable Function
+
+```kotlin
+@Composable
+internal fun MainScreen(
+    mainViewModel: MainViewModel,
+    bottomNavRouter: BottomNavRouter
+)
+```
+
+<ParamField path="mainViewModel" type="MainViewModel" required>
+  The ViewModel that manages main screen state including navigation badges.
+</ParamField>
+
+<ParamField path="bottomNavRouter" type="BottomNavRouter" required>
+  Router interface for opening different bottom navigation screens.
+</ParamField>
+
+### Features
+
+- Bottom navigation with three tabs: Products, Wishlist, Cart
+- Badge indicators on Wishlist and Cart tabs showing item counts
+- Navigation using Jetpack Compose Navigation
+- Persistent navigation state with saved state handling
+
+### Navigation Routes
+
+<ResponseField name="NavProducts" type="@Serializable object">
+  Route to the Product Listing Page (PLP).
+</ResponseField>
+
+<ResponseField name="NavWishlist" type="@Serializable object">
+  Route to the Wishlist screen.
+</ResponseField>
+
+<ResponseField name="NavCart" type="@Serializable object">
+  Route to the Cart screen.
+</ResponseField>
+
+### UI Components
+
+- **BottomNavigationBar:** Contains three navigation items with icons and badges
+- **NavHost:** Manages navigation between the three main screens
+- **NavigationItem:** Individual navigation bar item with badge support
+
+### State Observation
+
+```kotlin
+val state by mainViewModel.state.collectAsState()
+```
+
+Observes `MainScreenState` to display badge counts on navigation items.
+
+---
+
+## LoginScreen
+
+Authentication screen with email and password input fields.
+
+**File:** `onboarding-ui/src/main/java/com/denisbrandi/androidrealca/onboarding/presentation/view/LoginScreen.kt`
+
+### Composable Function
+
+```kotlin
+@Composable
+internal fun LoginScreen(
+    loginViewModel: LoginViewModel,
+    onLoggedIn: () -> Unit
+)
+```
+
+<ParamField path="loginViewModel" type="LoginViewModel" required>
+  The ViewModel that manages login state and authentication.
+</ParamField>
+
+<ParamField path="onLoggedIn" type="() -> Unit" required>
+  Callback invoked when login is successful.
+</ParamField>
+
+### Features
+
+- Email input field with email keyboard type
+- Password input field with password visual transformation
+- Loading button that shows progress during login
+- Error dialogs for various login errors:
+  - Generic error with retry option
+  - Invalid email
+  - Invalid password
+  - Incorrect credentials
+- Successful login navigation
+
+### UI Components
+
+- **TopBar:** Displays "Login" title
+- **Form:** Contains email and password input fields
+- **LoadingButton:** Submit button with loading state
+- **CustomAlertDialog:** Error and success message dialogs
+
+### State and Event Observation
+
+```kotlin
+val loginState by loginViewModel.state.collectAsState()
+
+LaunchedEffect(key1 = Unit) {
+    loginViewModel.viewEvent.onEach { viewEvent ->
+        // Handle LoginScreenEvent
+    }.launchIn(this)
+}
+```
+
+Observes both state changes and one-time events for login flow.
+
+### Error Handling
+
+Handles `LoginError` types:
+- `GenericError` - Shows retry dialog
+- `InvalidEmail` - Shows email validation error
+- `InvalidPassword` - Shows password validation error
+- `IncorrectCredentials` - Shows credentials error
+
+---
+
+## PLPScreen
+
+Product Listing Page displaying all available products with wishlist and cart actions.
+
+**File:** `plp-ui/src/main/java/com/denisbrandi/androidrealca/plp/presentation/view/PLPScreen.kt`
+
+### Composable Function
+
+```kotlin
+@Composable
+internal fun PLPScreen(
+    plpViewModel: PLPViewModel
+)
+```
+
+<ParamField path="plpViewModel" type="PLPViewModel" required>
+  The ViewModel that manages product listing state and operations.
+</ParamField>
+
+### Features
+
+- Displays personalized welcome message with user's full name
+- Shows loading state while fetching products
+- Error state with retry functionality
+- Product grid/list with images, names, and prices
+- Toggle favorite (wishlist) button for each product
+- Add to cart button for each product
+- Automatic product loading on screen launch
+
+### UI States
+
+<ResponseField name="Loading" type="DisplayState">
+  Shows full-screen loading indicator.
+</ResponseField>
+
+<ResponseField name="Error" type="DisplayState">
+  Shows error message with retry button.
+</ResponseField>
+
+<ResponseField name="Content" type="DisplayState">
+  Displays product list or empty message.
+</ResponseField>
+
+### UI Components
+
+- **TopBar:** Welcome message with user's name
+- **ProductRow:** Individual product card with:
+  - Product image (with placeholder/error fallback)
+  - Product name and price
+  - Wishlist toggle button (filled/outlined heart)
+  - Add to cart button
+- **LazyColumn:** Efficient list rendering for products
+
+### State Observation
+
+```kotlin
+val plpState by plpViewModel.state.collectAsState()
+```
+
+Observes `PLPScreenState` to render different UI states and product list.
+
+### Lifecycle
+
+```kotlin
+LaunchedEffect(Unit) {
+    plpViewModel.loadProducts()
+}
+```
+
+Automatically loads products when the screen is first composed.
+
+---
+
+## WishlistScreen
+
+Displays the user's saved wishlist items with options to remove or add to cart.
+
+**File:** `wishlist-ui/src/main/java/com/denisbrandi/androidrealca/wishlist/presentation/view/WishlistScreen.kt`
+
+### Composable Function
+
+```kotlin
+@Composable
+internal fun WishlistScreen(
+    wishlistViewModel: WishlistViewModel
+)
+```
+
+<ParamField path="wishlistViewModel" type="WishlistViewModel" required>
+  The ViewModel that manages wishlist state and operations.
+</ParamField>
+
+### Features
+
+- Displays list of wishlist items with product details
+- Remove item button (delete icon)
+- Add to cart button for each wishlist item
+- Shows "Wishlist is empty" message when no items are present
+- Uses `LazyColumn` for efficient rendering
+
+### UI Components
+
+- **TopBar:** Displays "Wishlist" title
+- **WishlistItemRow:** Individual wishlist item card with:
+  - Product image (with placeholder/error fallback)
+  - Product name and price
+  - Delete button to remove from wishlist
+  - Add to cart button
+- **FullScreenMessage:** Empty state message
+
+### State Observation
+
+```kotlin
+val wishlistState by wishlistViewModel.state.collectAsState()
+```
+
+Observes `WishlistScreenState` to reactively display wishlist items.
+
+### Item Actions
+
+<ParamField path="removeItemFromWishlist" type="action">
+  Removes the item from the wishlist when the delete button is clicked.
+</ParamField>
+
+<ParamField path="addProductToCart" type="action">
+  Adds the wishlist item to the cart with quantity 1 when the cart button is clicked.
+</ParamField>

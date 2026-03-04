@@ -1,0 +1,245 @@
+---
+title: HTTP Client Module
+description: Ktor-based HTTP client configuration with JSON serialization and timeout support
+---
+
+The HTTP client module provides a pre-configured Ktor HTTP client with content negotiation, JSON serialization, and timeout settings. It follows the provider pattern for easy testing and dependency injection.
+
+## Core Interfaces
+
+### HttpClientProvider
+
+Simple factory interface for obtaining HTTP client instances.
+
+```kotlin httpclient/src/commonMain/kotlin/com/denisbrandi/androidrealca/httpclient/HttpClientProvider.kt
+interface HttpClientProvider {
+    fun getClient(): HttpClient
+}
+```
+
+<Info>
+  This abstraction allows for easy mocking in tests and switching between different client configurations.
+</Info>
+
+## Implementation
+
+### RealHttpClientProvider
+
+Production implementation with preconfigured plugins.
+
+```kotlin httpclient/src/commonMain/kotlin/com/denisbrandi/androidrealca/httpclient/RealHttpClientProvider.kt
+object RealHttpClientProvider : HttpClientProvider {
+
+    private val httpClient by lazy {
+        createClient(CIO.create())
+    }
+
+    fun createClient(engine: HttpClientEngine): HttpClient {
+        return HttpClient(engine) {
+            install(ContentNegotiation) {
+                json(
+                    Json {
+                        isLenient = true
+                        ignoreUnknownKeys = true
+                    }
+                )
+            }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 3000L
+            }
+        }
+    }
+
+    override fun getClient(): HttpClient {
+        return httpClient
+    }
+}
+```
+
+#### Configuration Details
+
+<AccordionGroup>
+  <Accordion title="ContentNegotiation Plugin">
+    Configures automatic JSON serialization/deserialization:
+    - `isLenient = true`: Allows unquoted JSON strings
+    - `ignoreUnknownKeys = true`: Ignores unknown JSON fields instead of throwing exceptions
+    
+    This makes the client resilient to API changes where new fields are added.
+  </Accordion>
+  
+  <Accordion title="HttpTimeout Plugin">
+    Sets a 3-second timeout for all requests:
+    - `requestTimeoutMillis = 3000L`
+    
+    Prevents hanging requests and ensures quick failure for better UX.
+  </Accordion>
+  
+  <Accordion title="CIO Engine">
+    Uses Ktor's Coroutine-based I/O engine:
+    - Pure Kotlin implementation
+    - Fully asynchronous
+    - Multiplatform compatible
+  </Accordion>
+  
+  <Accordion title="Lazy Initialization">
+    The HTTP client is initialized lazily using Kotlin's `by lazy` delegate, ensuring it's created only once when first accessed.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  The `createClient(engine: HttpClientEngine)` function is exposed for testing purposes, allowing injection of a mock engine.
+</Note>
+
+## Authentication
+
+### AccessTokenProvider
+
+Utility object for providing authentication headers.
+
+```kotlin httpclient/src/commonMain/kotlin/com/denisbrandi/androidrealca/httpclient/AccessTokenProvider.kt
+object AccessTokenProvider {
+    fun getAccessTokenHeader(): Pair<String, String> {
+        return "Authorization" to "Bearer sghe50o5rkn9n9n1azs0ectmxnjjls7r9i1tksz3"
+    }
+}
+```
+
+<Warning>
+  This implementation uses a hardcoded token for demonstration purposes. In production, tokens should be retrieved from secure storage or an authentication service.
+</Warning>
+
+## Dependencies
+
+```kotlin httpclient/build.gradle.kts
+commonMain {
+    dependencies {
+        api(libs.ktor)
+        api(libs.ktor.cio)
+        api(libs.ktor.serialization)
+        api(libs.ktor.content.negotiation)
+    }
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="ktor-client-core" icon="server">
+    Core Ktor client functionality
+  </Card>
+  <Card title="ktor-client-cio" icon="gear">
+    Coroutine-based I/O engine
+  </Card>
+  <Card title="ktor-serialization-kotlinx-json" icon="brackets-curly">
+    JSON serialization support
+  </Card>
+  <Card title="ktor-client-content-negotiation" icon="handshake">
+    Content negotiation plugin
+  </Card>
+</CardGroup>
+
+<Info>
+  Dependencies are declared with `api` instead of `implementation`, exposing Ktor types to modules that depend on httpclient.
+</Info>
+
+## Usage Example
+
+### Basic GET Request
+
+```kotlin
+val httpClient = RealHttpClientProvider.getClient()
+
+@Serializable
+data class Product(val id: String, val name: String, val price: Double)
+
+suspend fun fetchProduct(id: String): Product {
+    return httpClient.get("https://api.example.com/products/$id")
+        .body()
+}
+```
+
+### Authenticated Request
+
+```kotlin
+suspend fun fetchUserData(): UserData {
+    val (headerName, headerValue) = AccessTokenProvider.getAccessTokenHeader()
+    
+    return httpClient.get("https://api.example.com/user") {
+        header(headerName, headerValue)
+    }.body()
+}
+```
+
+### POST Request with Body
+
+```kotlin
+@Serializable
+data class CreateProductRequest(val name: String, val price: Double)
+
+suspend fun createProduct(request: CreateProductRequest): Product {
+    return httpClient.post("https://api.example.com/products") {
+        contentType(ContentType.Application.Json)
+        setBody(request)
+    }.body()
+}
+```
+
+## Testing
+
+The module can be tested using Ktor's MockEngine:
+
+```kotlin
+import io.ktor.client.engine.mock.*
+import io.ktor.http.*
+import io.ktor.utils.io.*
+
+val mockEngine = MockEngine { request ->
+    respond(
+        content = ByteReadChannel("""{ "id": "123", "name": "Test" }""")
+        status = HttpStatusCode.OK,
+        headers = headersOf(HttpHeaders.ContentType, "application/json")
+    )
+}
+
+val testClient = RealHttpClientProvider.createClient(mockEngine)
+```
+
+<Steps>
+  <Step title="Create Mock Engine">
+    Define request/response behavior using `MockEngine`
+  </Step>
+  <Step title="Inject into Provider">
+    Use `createClient(engine)` to inject the mock engine
+  </Step>
+  <Step title="Test API Calls">
+    Make requests and verify behavior without network calls
+  </Step>
+</Steps>
+
+## Error Handling
+
+Ktor clients throw exceptions for failed requests:
+
+```kotlin
+import io.ktor.client.plugins.*
+
+try {
+    val response = httpClient.get("https://api.example.com/data")
+} catch (e: HttpRequestTimeoutException) {
+    // Handle timeout (3 second limit)
+} catch (e: ClientRequestException) {
+    // Handle 4xx errors
+} catch (e: ServerResponseException) {
+    // Handle 5xx errors
+}
+```
+
+<Tip>
+  Consider wrapping HTTP calls in the `Answer` type from the foundations module for functional error handling.
+</Tip>
+
+## Multiplatform Support
+
+The HTTP client module supports:
+- **JVM** (Android)
+- **iOS x64, arm64, simulator arm64**
+
+The CIO engine works consistently across all platforms without platform-specific implementations.

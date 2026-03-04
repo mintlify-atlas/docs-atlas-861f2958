@@ -1,0 +1,151 @@
+---
+title: Architecture Overview
+description: High-level overview of the Real Clean Architecture implementation in Android
+---
+
+This project demonstrates a strict implementation of Clean Architecture in Android, following SOLID principles and emphasizing testability, maintainability, and framework independence.
+
+## Core Principles
+
+The architecture is built on three fundamental principles:
+
+<CardGroup cols={3}>
+  <Card title="Layer Separation" icon="layer-group">
+    Clear separation between domain, data, and presentation layers
+  </Card>
+  <Card title="Dependency Rule" icon="arrow-right">
+    Dependencies point inward - domain layer has zero dependencies
+  </Card>
+  <Card title="Framework Independence" icon="shield">
+    Business logic is independent of Android framework
+  </Card>
+</CardGroup>
+
+## Module Dependency Graph
+
+The project uses a modular architecture with component-based organization:
+
+<Frame>
+  <img src="/images/AndroidRealCA-Modules.png" alt="Module Dependency Graph" />
+</Frame>
+
+<Note>
+  Library modules are omitted from the graph for clarity. The graph shows only component and UI modules to illustrate the architecture patterns.
+</Note>
+
+## Architecture Layers
+
+### Domain Layer
+
+The domain layer contains business logic and is completely framework-independent:
+
+- **Use Cases**: Encapsulate business operations
+- **Domain Models**: Pure business entities
+- **Repository Interfaces**: Contracts for data access
+
+```kotlin wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/domain/usecase/AddToWishlistUseCase.kt
+package com.denisbrandi.androidrealca.wishlist.domain.usecase
+
+import com.denisbrandi.androidrealca.user.domain.usecase.GetUser
+import com.denisbrandi.androidrealca.wishlist.domain.model.WishlistItem
+import com.denisbrandi.androidrealca.wishlist.domain.repository.WishlistRepository
+
+internal class AddToWishlistUseCase(
+    private val getUser: GetUser,
+    private val wishlistRepository: WishlistRepository
+) : AddToWishlist {
+    override fun invoke(wishlistItem: WishlistItem) {
+        wishlistRepository.addToWishlist(getUser().id, wishlistItem)
+    }
+}
+```
+
+### Data Layer
+
+The data layer implements repository interfaces and handles data persistence:
+
+```kotlin wishlist-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/wishlist/data/repository/RealWishlistRepository.kt
+internal class RealWishlistRepository(
+    private val cacheProvider: CacheProvider
+) : WishlistRepository {
+
+    private val flowCachedObject: FlowCachedObject<JsonWishlistCacheDto> by lazy {
+        cacheProvider.getFlowCachedObject(
+            fileName = "wishlist-cache",
+            serializer = JsonWishlistCacheDto.serializer(),
+            defaultValue = JsonWishlistCacheDto(emptyMap())
+        )
+    }
+
+    override fun observeWishlist(userId: String): Flow<List<WishlistItem>> {
+        return flowCachedObject.observe().map { cachedDto ->
+            mapToWishlistItems(cachedDto.usersWishlist[userId] ?: emptyList())
+        }
+    }
+}
+```
+
+### Presentation Layer
+
+The presentation layer handles UI logic using ViewModels:
+
+```kotlin wishlist-ui/src/main/java/com/denisbrandi/androidrealca/wishlist/presentation/viewmodel/RealWishlistViewModel.kt
+internal class RealWishlistViewModel(
+    observeUserWishlist: ObserveUserWishlist,
+    private val removeFromWishlist: RemoveFromWishlist,
+    private val addCartItem: AddCartItem,
+    private val stateDelegate: StateDelegate<WishlistScreenState>
+) : WishlistViewModel, StateViewModel<WishlistScreenState> by stateDelegate, ViewModel() {
+    init {
+        stateDelegate.setDefaultState(WishlistScreenState())
+        observeUserWishlist().onEach { wishlistItems ->
+            stateDelegate.updateState { WishlistScreenState(wishlistItems) }
+        }.launchIn(viewModelScope)
+    }
+}
+```
+
+## Key Characteristics
+
+<AccordionGroup>
+  <Accordion title="Minimal External Dependencies">
+    The project avoids heavy reliance on external libraries. The domain layer is completely framework-independent, while presentation and data layers interface with frameworks only when necessary.
+  </Accordion>
+  
+  <Accordion title="Testability First">
+    If a framework compromises testability, it is abstracted to ensure unit testing remains possible. All business logic can be tested without Android framework dependencies.
+  </Accordion>
+  
+  <Accordion title="Multiplatform Ready">
+    Component modules use Kotlin Multiplatform (commonMain/commonTest), making them portable across platforms while compiling faster since they don't depend on the Android framework.
+  </Accordion>
+</AccordionGroup>
+
+## Module Types
+
+The architecture defines four distinct module types:
+
+| Module Type | Purpose | Examples | Dependencies |
+|------------|---------|----------|-------------|
+| **Library** | Reusable utilities | cache, httpclient, viewmodel | Minimal, general-purpose |
+| **Component** | Domain + Data layers | cart-component, wishlist-component | Pure Kotlin/KMP |
+| **UI** | Presentation layer | cart-ui, wishlist-ui | Android framework |
+| **App** | Integration & navigation | app | All modules |
+
+<Tip>
+  Component modules compile much faster than UI modules because they don't depend on the Android framework.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Clean Architecture" href="/architecture/clean-architecture" icon="circle-nodes">
+    Learn about layer separation and dependency rules
+  </Card>
+  <Card title="SOLID Principles" href="/architecture/solid-principles" icon="cube">
+    See SOLID principles with real code examples
+  </Card>
+  <Card title="Modularization" href="/architecture/modularization" icon="boxes-stacked">
+    Understand the Package by Component strategy
+  </Card>
+</CardGroup>

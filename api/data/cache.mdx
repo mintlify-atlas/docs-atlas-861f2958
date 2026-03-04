@@ -1,0 +1,239 @@
+---
+title: Cache API
+description: Cache abstraction for persistent storage with reactive capabilities
+---
+
+The cache module provides a type-safe abstraction over persistent storage with support for both synchronous and reactive access patterns using Kotlin serialization.
+
+## CacheProvider
+
+Factory interface for creating cached object instances.
+
+**Location:** `cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/CacheProvider.kt`
+
+### Methods
+
+#### getCachedObject
+
+Creates a cached object for synchronous read/write operations.
+
+<ParamField path="fileName" type="String" required>
+  The cache file name/key
+</ParamField>
+
+<ParamField path="serializer" type="KSerializer<T>" required>
+  Kotlinx serialization serializer for type T
+</ParamField>
+
+<ParamField path="defaultValue" type="T" required>
+  Default value when cache is empty
+</ParamField>
+
+<ResponseField name="return" type="CachedObject<T>">
+  A cached object instance
+</ResponseField>
+
+```kotlin
+fun <T : Any> getCachedObject(
+    fileName: String,
+    serializer: KSerializer<T>,
+    defaultValue: T
+): CachedObject<T>
+```
+
+#### getFlowCachedObject
+
+Creates a cached object with reactive Flow-based observation.
+
+<ParamField path="fileName" type="String" required>
+  The cache file name/key
+</ParamField>
+
+<ParamField path="serializer" type="KSerializer<T>" required>
+  Kotlinx serialization serializer for type T
+</ParamField>
+
+<ParamField path="defaultValue" type="T" required>
+  Default value when cache is empty
+</ParamField>
+
+<ResponseField name="return" type="FlowCachedObject<T>">
+  A flow-enabled cached object instance
+</ResponseField>
+
+```kotlin
+fun <T : Any> getFlowCachedObject(
+    fileName: String,
+    serializer: KSerializer<T>,
+    defaultValue: T
+): FlowCachedObject<T>
+```
+
+---
+
+## CachedObject
+
+Interface for synchronous cached storage operations.
+
+**Location:** `cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/CachedObject.kt`
+
+### Methods
+
+#### put
+
+Stores a value in the cache.
+
+<ParamField path="value" type="T" required>
+  The value to cache
+</ParamField>
+
+```kotlin
+fun put(value: T)
+```
+
+#### get
+
+Retrieves the cached value or default if not present.
+
+<ResponseField name="return" type="T">
+  The cached value or default value
+</ResponseField>
+
+```kotlin
+fun get(): T
+```
+
+---
+
+## FlowCachedObject
+
+Extends CachedObject with reactive observation capabilities.
+
+**Location:** `cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/FlowCachedObject.kt`
+
+### Methods
+
+Inherits `put()` and `get()` from `CachedObject<T>`.
+
+#### observe
+
+Observes cache changes reactively.
+
+<ResponseField name="return" type="Flow<T>">
+  A Flow that emits the current value and subsequent updates
+</ResponseField>
+
+```kotlin
+fun observe(): Flow<T>
+```
+
+---
+
+## RealCachedObject
+
+Concrete implementation of CachedObject using multiplatform-settings library.
+
+**Location:** `cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/RealCachedObject.kt`
+
+### Constructor
+
+<ParamField path="fileName" type="String" required>
+  The cache file name/key
+</ParamField>
+
+<ParamField path="settings" type="Settings" required>
+  Settings instance from multiplatform-settings library
+</ParamField>
+
+<ParamField path="serializer" type="KSerializer<T>" required>
+  Kotlinx serialization serializer
+</ParamField>
+
+<ParamField path="defaultValue" type="T" required>
+  Default value when cache is empty
+</ParamField>
+
+```kotlin
+class RealCachedObject<T : Any>(
+    private val fileName: String,
+    private val settings: Settings,
+    private val serializer: KSerializer<T>,
+    private val defaultValue: T
+) : CachedObject<T>
+```
+
+### Methods
+
+#### put
+
+Serializes and stores the value in Settings.
+
+<ParamField path="value" type="T" required>
+  The value to cache
+</ParamField>
+
+```kotlin
+override fun put(value: T)
+```
+
+#### get
+
+Deserializes and retrieves the cached value.
+
+<ResponseField name="return" type="T">
+  The cached value or default value
+</ResponseField>
+
+```kotlin
+override fun get(): T
+```
+
+---
+
+## RealFlowCachedObject
+
+Decorator that adds reactive Flow observation to any CachedObject.
+
+**Location:** `cache/src/commonMain/kotlin/com/denisbrandi/androidrealca/cache/RealFlowCachedObject.kt`
+
+### Constructor
+
+<ParamField path="cachedObject" type="CachedObject<T>" required>
+  The underlying cached object to decorate
+</ParamField>
+
+```kotlin
+class RealFlowCachedObject<T : Any>(
+    private val cachedObject: CachedObject<T>
+) : FlowCachedObject<T>, CachedObject<T> by cachedObject
+```
+
+### Methods
+
+#### put
+
+Stores the value and emits it to observers.
+
+<ParamField path="value" type="T" required>
+  The value to cache and emit
+</ParamField>
+
+```kotlin
+override fun put(value: T)
+```
+
+#### observe
+
+Returns a StateFlow that emits cache updates.
+
+<ResponseField name="return" type="Flow<T>">
+  A StateFlow emitting current and future cache values
+</ResponseField>
+
+```kotlin
+override fun observe(): Flow<T>
+```
+
+### Implementation Details
+
+Uses `MutableStateFlow` internally to maintain reactive state. The flow is initialized with the current cached value and updates whenever `put()` is called.

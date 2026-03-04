@@ -1,0 +1,308 @@
+---
+title: ViewModel Module
+description: State and event management utilities for presentation layer using Kotlin Flows
+---
+
+The ViewModel module provides lightweight utilities for managing UI state and one-time events in presentation layer components. It uses Kotlin coroutines and Flows for reactive state management.
+
+## Core Interfaces
+
+### StateViewModel
+
+Interface for ViewModels that expose UI state as a `StateFlow`.
+
+```kotlin viewmodel/src/commonMain/kotlin/com/denisbrandi/androidrealca/viewmodel/ViewModel.kt
+interface StateViewModel<State> {
+    val state: StateFlow<State>
+}
+```
+
+<ParamField path="State" type="Type">
+  Generic type representing the UI state (typically a data class)
+</ParamField>
+
+### EventViewModel
+
+Interface for ViewModels that emit one-time events to the UI.
+
+```kotlin viewmodel/src/commonMain/kotlin/com/denisbrandi/androidrealca/viewmodel/ViewModel.kt
+interface EventViewModel<ViewEvent> {
+    val viewEvent: Flow<ViewEvent>
+}
+```
+
+<ParamField path="ViewEvent" type="Type">
+  Generic type representing one-time UI events (navigation, snackbar messages, etc.)
+</ParamField>
+
+<Info>
+  `StateViewModel` uses `StateFlow` (which always has a current value), while `EventViewModel` uses regular `Flow` (for one-time emissions).
+</Info>
+
+## Delegate Implementations
+
+### StateDelegate
+
+Helper class that implements `StateViewModel` with state update utilities.
+
+```kotlin viewmodel/src/commonMain/kotlin/com/denisbrandi/androidrealca/viewmodel/ViewModel.kt
+class StateDelegate<State> : StateViewModel<State> {
+    private lateinit var _state: MutableStateFlow<State>
+    override val state: StateFlow<State>
+        get() = _state.asStateFlow()
+
+    fun setDefaultState(state: State) {
+        _state = MutableStateFlow(state)
+    }
+
+    fun updateState(block: (State) -> State) {
+        _state.update {
+            block(it)
+        }
+    }
+}
+```
+
+<AccordionGroup>
+  <Accordion title="setDefaultState(state: State)">
+    Initializes the `MutableStateFlow` with the provided initial state. Must be called before accessing `state`.
+  </Accordion>
+  
+  <Accordion title="updateState(block: (State) -> State)">
+    Atomically updates the state using the provided transformation function. Uses `MutableStateFlow.update()` for thread-safe updates.
+  </Accordion>
+  
+  <Accordion title="state: StateFlow<State>">
+    Exposes the state as an immutable `StateFlow` for UI observation. Uses `asStateFlow()` to prevent external modifications.
+  </Accordion>
+</AccordionGroup>
+
+### EventDelegate
+
+Helper class that implements `EventViewModel` for one-time events.
+
+```kotlin viewmodel/src/commonMain/kotlin/com/denisbrandi/androidrealca/viewmodel/ViewModel.kt
+class EventDelegate<ViewEvent> : EventViewModel<ViewEvent> {
+    private val _viewEvent = MutableSharedFlow<ViewEvent>()
+    override val viewEvent: Flow<ViewEvent> = _viewEvent.asSharedFlow()
+
+    fun sendEvent(scope: CoroutineScope, newEvent: ViewEvent) {
+        scope.launch {
+            _viewEvent.emit(newEvent)
+        }
+    }
+}
+```
+
+<AccordionGroup>
+  <Accordion title="sendEvent(scope, newEvent)">
+    Emits a one-time event to all active collectors. Requires a `CoroutineScope` since emission is suspending.
+  </Accordion>
+  
+  <Accordion title="viewEvent: Flow<ViewEvent>">
+    Exposes events as an immutable `Flow`. Uses `SharedFlow` with default configuration (no replay, no buffer).
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  `SharedFlow` without replay means late collectors won't receive past events. This is intentional for one-time UI events.
+</Warning>
+
+## Usage Patterns
+
+### Simple State Management
+
+```kotlin
+data class CounterState(
+    val count: Int = 0,
+    val isLoading: Boolean = false
+)
+
+class CounterViewModel : StateViewModel<CounterState> by StateDelegate() {
+    private val stateDelegate = StateDelegate<CounterState>()
+    
+    override val state: StateFlow<CounterState> = stateDelegate.state
+
+    init {
+        stateDelegate.setDefaultState(CounterState())
+    }
+
+    fun increment() {
+        stateDelegate.updateState { it.copy(count = it.count + 1) }
+    }
+
+    fun setLoading(loading: Boolean) {
+        stateDelegate.updateState { it.copy(isLoading = loading) }
+    }
+}
+```
+
+### Combined State and Events
+
+```kotlin
+data class LoginState(
+    val username: String = "",
+    val isLoading: Boolean = false
+)
+
+sealed class LoginEvent {
+    data object NavigateToHome : LoginEvent()
+    data class ShowError(val message: String) : LoginEvent()
+}
+
+class LoginViewModel(
+    private val viewModelScope: CoroutineScope
+) : StateViewModel<LoginState> by StateDelegate(),
+    EventViewModel<LoginEvent> by EventDelegate() {
+    
+    private val stateDelegate = StateDelegate<LoginState>()
+    private val eventDelegate = EventDelegate<LoginEvent>()
+    
+    override val state: StateFlow<LoginState> = stateDelegate.state
+    override val viewEvent: Flow<LoginEvent> = eventDelegate.viewEvent
+
+    init {
+        stateDelegate.setDefaultState(LoginState())
+    }
+
+    fun onUsernameChanged(username: String) {
+        stateDelegate.updateState { it.copy(username = username) }
+    }
+
+    fun onLoginClicked() {
+        stateDelegate.updateState { it.copy(isLoading = true) }
+        
+        viewModelScope.launch {
+            val result = performLogin()
+            stateDelegate.updateState { it.copy(isLoading = false) }
+            
+            if (result.isSuccess) {
+                eventDelegate.sendEvent(viewModelScope, LoginEvent.NavigateToHome)
+            } else {
+                eventDelegate.sendEvent(viewModelScope, LoginEvent.ShowError("Login failed"))
+            }
+        }
+    }
+}
+```
+
+### UI Observation (Compose)
+
+```kotlin
+@Composable
+fun LoginScreen(viewModel: LoginViewModel) {
+    val state by viewModel.state.collectAsState()
+    val navController = rememberNavController()
+
+    LaunchedEffect(Unit) {
+        viewModel.viewEvent.collect { event ->
+            when (event) {
+                is LoginEvent.NavigateToHome -> navController.navigate("home")
+                is LoginEvent.ShowError -> {
+                    // Show snackbar
+                }
+            }
+        }
+    }
+
+    Column {
+        TextField(
+            value = state.username,
+            onValueChange = viewModel::onUsernameChanged
+        )
+        
+        Button(
+            onClick = viewModel::onLoginClicked,
+            enabled = !state.isLoading
+        ) {
+            Text("Login")
+        }
+        
+        if (state.isLoading) {
+            CircularProgressIndicator()
+        }
+    }
+}
+```
+
+## Testing Support
+
+### Testing State Updates
+
+```kotlin
+@Test
+fun `increment updates count`() = runTest {
+    val viewModel = CounterViewModel()
+    
+    assertEquals(0, viewModel.state.value.count)
+    
+    viewModel.increment()
+    
+    assertEquals(1, viewModel.state.value.count)
+}
+```
+
+### Testing Events
+
+Use the `flow-test-observer` library to test event emissions:
+
+```kotlin
+import com.denisbrandi.androidrealca.flow.testobserver.test
+
+@Test
+fun `login failure emits error event`() = runTest {
+    val viewModel = LoginViewModel(this)
+    val observer = viewModel.viewEvent.test(this)
+    
+    viewModel.onLoginClicked()
+    
+    val events = observer.getValues()
+    assertTrue(events.any { it is LoginEvent.ShowError })
+}
+```
+
+<Tip>
+  Use `runTest` from `kotlinx-coroutines-test` to test suspend functions and flows in a controlled test environment.
+</Tip>
+
+## Dependencies
+
+```kotlin viewmodel/build.gradle.kts
+commonMain {
+    dependencies {
+        implementation(libs.coroutines.core)
+    }
+}
+```
+
+<Info>
+  The module has a single dependency on `kotlinx.coroutines`, making it lightweight and easy to integrate.
+</Info>
+
+## Design Rationale
+
+<AccordionGroup>
+  <Accordion title="Why Delegates?">
+    Delegates allow composition over inheritance. A ViewModel can implement both `StateViewModel` and `EventViewModel` using delegation, keeping the code clean and testable.
+  </Accordion>
+  
+  <Accordion title="Why StateFlow vs Flow?">
+    `StateFlow` always has a current value, making it perfect for UI state that should be immediately available. Regular `Flow` is used for one-time events to avoid replay issues.
+  </Accordion>
+  
+  <Accordion title="Why sendEvent needs CoroutineScope?">
+    `SharedFlow.emit()` is a suspending function. Requiring a `CoroutineScope` makes the caller responsible for cancellation and lifecycle management.
+  </Accordion>
+  
+  <Accordion title="Why lateinit for _state?">
+    This allows ViewModels to call `setDefaultState()` in their constructor or init block, providing flexibility in initialization order.
+  </Accordion>
+</AccordionGroup>
+
+## Multiplatform Support
+
+The ViewModel module is fully multiplatform, supporting:
+- **JVM** (Android)
+- **iOS x64, arm64, simulator arm64**
+
+No platform-specific implementations are required.

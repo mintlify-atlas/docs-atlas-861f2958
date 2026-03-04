@@ -1,0 +1,389 @@
+---
+title: Data Layer
+description: Repository implementations, caching strategies, and network communication
+---
+
+The **Data Layer** is responsible for providing data to the domain layer. It implements repository interfaces defined in the domain layer and manages data sources like network APIs and local cache.
+
+## Key Components
+
+The data layer consists of:
+
+1. **Repository Implementations** - Concrete implementations of domain repository interfaces
+2. **Data Transfer Objects (DTOs)** - Models for serialization/deserialization
+3. **Data Sources** - Cache and network clients
+
+## Repository Implementations
+
+Repositories implement the interfaces defined in the domain layer, coordinating between cache and network data sources.
+
+### Example: RealCartRepository
+
+```kotlin cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/data/repository/RealCartRepository.kt
+package com.denisbrandi.androidrealca.cart.data.repository
+
+import com.denisbrandi.androidrealca.cache.*
+import com.denisbrandi.androidrealca.cart.data.model.*
+import com.denisbrandi.androidrealca.cart.domain.model.*
+import com.denisbrandi.androidrealca.cart.domain.repository.CartRepository
+import com.denisbrandi.androidrealca.money.domain.model.Money
+import kotlinx.coroutines.flow.*
+
+internal class RealCartRepository(
+    private val cacheProvider: CacheProvider
+) : CartRepository {
+
+    private val flowCachedObject: FlowCachedObject<JsonCartCacheDto> by lazy {
+        cacheProvider.getFlowCachedObject(
+            fileName = "cart-cache",
+            serializer = JsonCartCacheDto.serializer(),
+            defaultValue = JsonCartCacheDto(emptyMap())
+        )
+    }
+
+    override fun updateCartItem(userId: String, cartItem: CartItem) {
+        val updatedCache = getUpdatedCacheForUser(userId) { userCart ->
+            val cartItemInCache = userCart.find { it.id == cartItem.id }
+            val cartItemDto = mapToDto(cartItem)
+            if (cartItemInCache != null) {
+                if (cartItem.quantity == 0) {
+                    userCart.remove(cartItemInCache)
+                } else {
+                    val index = userCart.indexOf(cartItemInCache)
+                    userCart[index] = cartItemDto
+                }
+            } else {
+                userCart.add(cartItemDto)
+            }
+        }
+        flowCachedObject.put(updatedCache)
+    }
+
+    override fun observeCart(userId: String): Flow<Cart> {
+        return flowCachedObject.observe().map { cachedDto ->
+            mapToCart(userId, cachedDto)
+        }
+    }
+
+    override fun getCart(userId: String): Cart {
+        return mapToCart(userId, flowCachedObject.get())
+    }
+
+    private fun mapToCart(userId: String, cachedDto: JsonCartCacheDto): Cart {
+        return Cart(
+            mapToCartItems(cachedDto.usersCart[userId] ?: emptyList())
+        )
+    }
+
+    private fun mapToCartItems(dtos: List<JsonCartItemCacheDto>): List<CartItem> {
+        return dtos.map { dto ->
+            CartItem(
+                id = dto.id,
+                name = dto.name,
+                money = Money(dto.price, dto.currency),
+                imageUrl = dto.imageUrl,
+                quantity = dto.quantity
+            )
+        }
+    }
+
+    private fun mapToDto(cartItem: CartItem): JsonCartItemCacheDto {
+        return JsonCartItemCacheDto(
+            id = cartItem.id,
+            name = cartItem.name,
+            price = cartItem.money.amount,
+            currency = cartItem.money.currencySymbol,
+            imageUrl = cartItem.imageUrl,
+            quantity = cartItem.quantity
+        )
+    }
+}
+```
+
+<Note>
+**Key Responsibilities:**
+- Manages cart data using `FlowCachedObject` for reactive updates
+- Maps between domain models (`Cart`, `CartItem`) and DTOs (`JsonCartCacheDto`)
+- Handles cart item updates including quantity changes and removals
+</Note>
+
+### Example: RealUserRepository
+
+```kotlin user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/data/repository/RealUserRepository.kt
+package com.denisbrandi.androidrealca.user.data.repository
+
+import com.denisbrandi.androidrealca.cache.*
+import com.denisbrandi.androidrealca.foundations.Answer
+import com.denisbrandi.androidrealca.httpclient.AccessTokenProvider
+import com.denisbrandi.androidrealca.user.data.model.*
+import com.denisbrandi.androidrealca.user.domain.model.*
+import com.denisbrandi.androidrealca.user.domain.repository.UserRepository
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.*
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.*
+
+internal class RealUserRepository(
+    private val client: HttpClient,
+    cacheProvider: CacheProvider
+) : UserRepository {
+
+    private val cachedObject: CachedObject<JsonUserCacheDTO> by lazy {
+        cacheProvider.getCachedObject(
+            fileName = "user-cache",
+            serializer = JsonUserCacheDTO.serializer(),
+            defaultValue = DEFAULT_USER
+        )
+    }
+
+    override suspend fun login(loginRequest: LoginRequest): Answer<Unit, LoginError> {
+        return try {
+            val response =
+                client.post("https://api.json-generator.com/templates/Q7s_NUVpyBND/data") {
+                    headers {
+                        append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        val accessTokenHeader = AccessTokenProvider.getAccessTokenHeader()
+                        append(accessTokenHeader.first, accessTokenHeader.second)
+                    }
+                    setBody(JsonLoginRequestDTO(loginRequest.email, loginRequest.password))
+                }
+            if (response.status.isSuccess()) {
+                handleSuccessfulLoginResponse(response)
+            } else {
+                handleFailingLoginResponse(response)
+            }
+        } catch (t: Throwable) {
+            t.printStackTrace()
+            Answer.Error(LoginError.GenericError)
+        }
+    }
+
+    private suspend fun handleSuccessfulLoginResponse(httpResponse: HttpResponse): Answer<Unit, LoginError> {
+        val responseBody = httpResponse.body<JsonLoginResponseDTO>()
+        cachedObject.put(JsonUserCacheDTO(responseBody.id, responseBody.fullName))
+        return Answer.Success(Unit)
+    }
+
+    private fun handleFailingLoginResponse(httpResponse: HttpResponse): Answer<Unit, LoginError> {
+        val error = if (httpResponse.status.value == 401) {
+            LoginError.IncorrectCredentials
+        } else {
+            LoginError.GenericError
+        }
+        return Answer.Error(error)
+    }
+
+    override fun getUser(): User {
+        val cachedUser = cachedObject.get()
+        return User(cachedUser.id, cachedUser.fullName)
+    }
+
+    override fun isLoggedIn(): Boolean {
+        return cachedObject.get() != DEFAULT_USER
+    }
+
+    companion object {
+        val DEFAULT_USER = JsonUserCacheDTO("", "")
+    }
+}
+```
+
+<Tip>
+**Network + Cache Pattern:**
+- Uses Ktor `HttpClient` for network requests
+- Stores authenticated user in cache
+- Returns `Answer<Success, Error>` for error handling
+</Tip>
+
+### Example: RealProductRepository
+
+```kotlin product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/data/repository/RealProductRepository.kt
+package com.denisbrandi.androidrealca.product.data.repository
+
+import com.denisbrandi.androidrealca.foundations.Answer
+import com.denisbrandi.androidrealca.httpclient.AccessTokenProvider
+import com.denisbrandi.androidrealca.money.domain.model.Money
+import com.denisbrandi.androidrealca.product.data.model.JsonProductResponseDTO
+import com.denisbrandi.androidrealca.product.domain.model.Product
+import com.denisbrandi.androidrealca.product.domain.repository.ProductRepository
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.*
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.*
+
+internal class RealProductRepository(
+    private val httpClient: HttpClient
+) : ProductRepository {
+    override suspend fun getProducts(): Answer<List<Product>, Unit> {
+        return try {
+            val response =
+                httpClient.get("https://api.json-generator.com/templates/Vc6TVI8VwZNT/data") {
+                    headers {
+                        append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        val accessTokenHeader = AccessTokenProvider.getAccessTokenHeader()
+                        append(accessTokenHeader.first, accessTokenHeader.second)
+                    }
+                }
+            if (response.status.isSuccess()) {
+                handleSuccessfulProductsResponse(response)
+            } else {
+                Answer.Error(Unit)
+            }
+        } catch (t: Throwable) {
+            Answer.Error(Unit)
+        }
+    }
+
+    private suspend fun handleSuccessfulProductsResponse(httpResponse: HttpResponse): Answer<List<Product>, Unit> {
+        val responseBody = httpResponse.body<List<JsonProductResponseDTO>>()
+        return Answer.Success(mapProducts(responseBody))
+    }
+
+    private fun mapProducts(jsonProducts: List<JsonProductResponseDTO>): List<Product> {
+        return jsonProducts.map { jsonProduct ->
+            Product(
+                jsonProduct.id.toString(),
+                jsonProduct.name,
+                Money(jsonProduct.price, jsonProduct.currency),
+                jsonProduct.imageUrl
+            )
+        }
+    }
+}
+```
+
+## Cache Management
+
+The architecture uses `CacheProvider` to create cached objects that persist data locally.
+
+### Cache Types
+
+<CodeGroup>
+
+```kotlin CachedObject (Synchronous)
+val cachedObject: CachedObject<JsonUserCacheDTO> = 
+    cacheProvider.getCachedObject(
+        fileName = "user-cache",
+        serializer = JsonUserCacheDTO.serializer(),
+        defaultValue = DEFAULT_USER
+    )
+
+// Read
+val user = cachedObject.get()
+
+// Write
+cachedObject.put(JsonUserCacheDTO(id, name))
+```
+
+```kotlin FlowCachedObject (Reactive)
+val flowCachedObject: FlowCachedObject<JsonCartCacheDto> = 
+    cacheProvider.getFlowCachedObject(
+        fileName = "cart-cache",
+        serializer = JsonCartCacheDto.serializer(),
+        defaultValue = JsonCartCacheDto(emptyMap())
+    )
+
+// Observe changes reactively
+flowCachedObject.observe().collect { cart ->
+    // React to cache updates
+}
+
+// Read once
+val cart = flowCachedObject.get()
+
+// Write
+flowCachedObject.put(updatedCart)
+```
+
+</CodeGroup>
+
+<Check>
+**When to use each:**
+- `CachedObject` - Simple read/write operations (user sessions, settings)
+- `FlowCachedObject` - Reactive UI updates (cart, wishlist)
+</Check>
+
+## Data Mapping
+
+Repositories map between DTOs (data layer) and domain models (domain layer).
+
+```kotlin Mapping Pattern
+// DTO -> Domain Model
+private fun mapToCartItems(dtos: List<JsonCartItemCacheDto>): List<CartItem> {
+    return dtos.map { dto ->
+        CartItem(
+            id = dto.id,
+            name = dto.name,
+            money = Money(dto.price, dto.currency),
+            imageUrl = dto.imageUrl,
+            quantity = dto.quantity
+        )
+    }
+}
+
+// Domain Model -> DTO
+private fun mapToDto(cartItem: CartItem): JsonCartItemCacheDto {
+    return JsonCartItemCacheDto(
+        id = cartItem.id,
+        name = cartItem.name,
+        price = cartItem.money.amount,
+        currency = cartItem.money.currencySymbol,
+        imageUrl = cartItem.imageUrl,
+        quantity = cartItem.quantity
+    )
+}
+```
+
+<Warning>
+**Important:** Never expose DTOs to the domain or presentation layers. Always map to domain models first.
+</Warning>
+
+## Error Handling
+
+Repositories use the `Answer<Success, Error>` type for operations that can fail.
+
+```kotlin Error Handling Pattern
+override suspend fun login(loginRequest: LoginRequest): Answer<Unit, LoginError> {
+    return try {
+        val response = client.post(url) { /* ... */ }
+        if (response.status.isSuccess()) {
+            handleSuccessfulLoginResponse(response)
+        } else {
+            handleFailingLoginResponse(response)
+        }
+    } catch (t: Throwable) {
+        t.printStackTrace()
+        Answer.Error(LoginError.GenericError)
+    }
+}
+```
+
+## Benefits of the Data Layer
+
+<CardGroup cols={2}>
+  <Card title="Single Source of Truth" icon="database">
+    Repositories coordinate cache and network to provide consistent data
+  </Card>
+  <Card title="Offline Support" icon="wifi-slash">
+    Cache-first strategies enable offline functionality
+  </Card>
+  <Card title="Testable" icon="vial">
+    Repository implementations can be easily mocked for testing
+  </Card>
+  <Card title="Separation of Concerns" icon="layer-group">
+    Domain layer doesn't know about network or cache implementation details
+  </Card>
+</CardGroup>
+
+## Related Layers
+
+<CardGroup cols={2}>
+  <Card title="Domain Layer" icon="gears" href="/layers/domain">
+    Defines repository interfaces that data layer implements
+  </Card>
+  <Card title="Presentation Layer" icon="desktop" href="/layers/presentation">
+    Consumes domain use cases that rely on repositories
+  </Card>
+</CardGroup>

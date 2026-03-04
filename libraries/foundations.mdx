@@ -1,0 +1,377 @@
+---
+title: Foundations Module
+description: Core language extensions and functional programming utilities including the Answer type for error handling
+---
+
+The foundations module provides fundamental utilities and language extensions that are used throughout the application. It focuses on functional programming patterns and type-safe error handling.
+
+## The Answer Type
+
+The `Answer` type is a sealed class representing the result of an operation that can either succeed or fail. It's an implementation of the Either/Result pattern commonly used in functional programming.
+
+```kotlin foundations/src/commonMain/kotlin/com/denisbrandi/androidrealca/foundations/Answer.kt
+sealed class Answer<out T, out E> {
+    data class Success<out T>(
+        val data: T,
+    ) : Answer<T, Nothing>()
+
+    data class Error<out E>(
+        val reason: E,
+    ) : Answer<Nothing, E>()
+
+    fun <C> fold(
+        success: (T) -> C,
+        error: (E) -> C,
+    ): C =
+        when (this) {
+            is Success -> success(data)
+            is Error -> error(reason)
+        }
+}
+```
+
+### Type Parameters
+
+<ParamField path="T" type="Type">
+  The type of the success value
+</ParamField>
+
+<ParamField path="E" type="Type">
+  The type of the error reason
+</ParamField>
+
+### Sealed Class Structure
+
+<Accordion title="Answer.Success<T>">
+  Represents a successful operation containing data of type `T`.
+  
+  ```kotlin
+  data class Success<out T>(
+      val data: T,
+  ) : Answer<T, Nothing>()
+  ```
+  
+  <Info>
+    Uses `Nothing` as the error type since success cannot have an error.
+  </Info>
+</Accordion>
+
+<Accordion title="Answer.Error<E>">
+  Represents a failed operation containing an error reason of type `E`.
+  
+  ```kotlin
+  data class Error<out E>(
+      val reason: E,
+  ) : Answer<Nothing, E>()
+  ```
+  
+  <Info>
+    Uses `Nothing` as the success type since errors cannot have data.
+  </Info>
+</Accordion>
+
+## Core Operations
+
+### fold()
+
+Transforms an `Answer` into a single result by providing handlers for both success and error cases.
+
+```kotlin
+fun <C> fold(
+    success: (T) -> C,
+    error: (E) -> C,
+): C
+```
+
+<Steps>
+  <Step title="Pattern Match">
+    Determines if the Answer is Success or Error
+  </Step>
+  <Step title="Apply Handler">
+    Calls the appropriate handler function with the contained value
+  </Step>
+  <Step title="Return Result">
+    Returns the result of the handler function
+  </Step>
+</Steps>
+
+## Usage Patterns
+
+### Basic Success/Error Handling
+
+```kotlin
+fun divide(a: Int, b: Int): Answer<Int, String> {
+    return if (b == 0) {
+        Answer.Error("Division by zero")
+    } else {
+        Answer.Success(a / b)
+    }
+}
+
+val result = divide(10, 2)
+val message = result.fold(
+    success = { "Result: $it" },
+    error = { "Error: $it" }
+)
+println(message) // "Result: 5"
+```
+
+### Repository Pattern
+
+```kotlin
+sealed class DataError {
+    data object NetworkError : DataError()
+    data object NotFound : DataError()
+    data class ServerError(val code: Int) : DataError()
+}
+
+interface ProductRepository {
+    suspend fun getProduct(id: String): Answer<Product, DataError>
+}
+
+class RealProductRepository(
+    private val api: ProductApi
+) : ProductRepository {
+    override suspend fun getProduct(id: String): Answer<Product, DataError> {
+        return try {
+            val product = api.fetchProduct(id)
+            Answer.Success(product)
+        } catch (e: IOException) {
+            Answer.Error(DataError.NetworkError)
+        } catch (e: HttpException) {
+            if (e.code == 404) {
+                Answer.Error(DataError.NotFound)
+            } else {
+                Answer.Error(DataError.ServerError(e.code))
+            }
+        }
+    }
+}
+```
+
+### Use Case Pattern
+
+```kotlin
+class GetProductUseCase(
+    private val repository: ProductRepository
+) {
+    suspend operator fun invoke(id: String): Answer<Product, DataError> {
+        return repository.getProduct(id)
+    }
+}
+
+// Usage in ViewModel
+class ProductViewModel(private val getProduct: GetProductUseCase) {
+    fun loadProduct(id: String) {
+        viewModelScope.launch {
+            val result = getProduct(id)
+            result.fold(
+                success = { product ->
+                    updateState { state.copy(product = product, isLoading = false) }
+                },
+                error = { error ->
+                    updateState { state.copy(error = error, isLoading = false) }
+                }
+            )
+        }
+    }
+}
+```
+
+### Chaining Operations
+
+```kotlin
+// Extension function for chaining
+fun <T, E, R> Answer<T, E>.map(transform: (T) -> R): Answer<R, E> {
+    return fold(
+        success = { Answer.Success(transform(it)) },
+        error = { Answer.Error(it) }
+    )
+}
+
+fun <T, E, R> Answer<T, E>.flatMap(transform: (T) -> Answer<R, E>): Answer<R, E> {
+    return fold(
+        success = { transform(it) },
+        error = { Answer.Error(it) }
+    )
+}
+
+// Example usage
+val result: Answer<String, DataError> = getProduct("123")
+    .map { it.name }
+    .map { it.uppercase() }
+```
+
+### UI State Mapping
+
+```kotlin
+sealed class UiState<out T> {
+    data object Loading : UiState<Nothing>()
+    data class Content<T>(val data: T) : UiState<T>()
+    data class Error(val message: String) : UiState<Nothing>()
+}
+
+fun <T> Answer<T, DataError>.toUiState(): UiState<T> {
+    return fold(
+        success = { UiState.Content(it) },
+        error = { error ->
+            val message = when (error) {
+                is DataError.NetworkError -> "Network error occurred"
+                is DataError.NotFound -> "Item not found"
+                is DataError.ServerError -> "Server error: ${error.code}"
+            }
+            UiState.Error(message)
+        }
+    )
+}
+```
+
+## Testing
+
+### Testing Success Cases
+
+```kotlin
+@Test
+fun `getProduct returns success when API succeeds`() = runTest {
+    val product = Product(id = "123", name = "Test")
+    val repository = FakeProductRepository(
+        response = Answer.Success(product)
+    )
+    
+    val result = repository.getProduct("123")
+    
+    assertTrue(result is Answer.Success)
+    assertEquals(product, (result as Answer.Success).data)
+}
+```
+
+### Testing Error Cases
+
+```kotlin
+@Test
+fun `getProduct returns error when network fails`() = runTest {
+    val repository = FakeProductRepository(
+        response = Answer.Error(DataError.NetworkError)
+    )
+    
+    val result = repository.getProduct("123")
+    
+    assertTrue(result is Answer.Error)
+    assertEquals(DataError.NetworkError, (result as Answer.Error).reason)
+}
+```
+
+### Testing fold()
+
+```kotlin
+@Test
+fun `fold handles success case`() {
+    val answer: Answer<Int, String> = Answer.Success(42)
+    
+    val result = answer.fold(
+        success = { it * 2 },
+        error = { 0 }
+    )
+    
+    assertEquals(84, result)
+}
+
+@Test
+fun `fold handles error case`() {
+    val answer: Answer<Int, String> = Answer.Error("Failed")
+    
+    val result = answer.fold(
+        success = { it * 2 },
+        error = { it.length }
+    )
+    
+    assertEquals(6, result)
+}
+```
+
+## Design Rationale
+
+<AccordionGroup>
+  <Accordion title="Why Answer instead of Result?">
+    Kotlin has a built-in `Result` type, but it's limited to `Throwable` as the error type. `Answer` allows any type for errors, enabling type-safe, domain-specific error representations.
+  </Accordion>
+  
+  <Accordion title="Why fold() is the core operation?">
+    The `fold()` function forces handling of both success and error cases, preventing forgotten error handling. It's also the building block for other operations like `map()`, `flatMap()`, etc.
+  </Accordion>
+  
+  <Accordion title="Covariant Type Parameters">
+    Both type parameters are declared as `out` (covariant), allowing `Answer<Dog, String>` to be used where `Answer<Animal, String>` is expected.
+  </Accordion>
+  
+  <Accordion title="Data Classes for Pattern Matching">
+    Success and Error are data classes, providing automatic `equals()`, `hashCode()`, and `copy()` implementations, and enabling destructuring.
+  </Accordion>
+</AccordionGroup>
+
+## Dependencies
+
+```kotlin foundations/build.gradle.kts
+commonMain {
+    dependencies {}
+}
+```
+
+<Check>
+  The foundations module has **zero external dependencies**, making it a pure Kotlin abstraction that can be used anywhere.
+</Check>
+
+## Multiplatform Support
+
+The foundations module is fully multiplatform, supporting:
+- **JVM** (Android)
+- **iOS x64, arm64, simulator arm64**
+- Any other Kotlin target
+
+No platform-specific implementations required.
+
+## Extension Utilities
+
+Consider creating these common extensions for `Answer` in your project:
+
+```kotlin
+// Get value or null
+fun <T, E> Answer<T, E>.getOrNull(): T? = fold(
+    success = { it },
+    error = { null }
+)
+
+// Get value or default
+fun <T, E> Answer<T, E>.getOrDefault(default: T): T = fold(
+    success = { it },
+    error = { default }
+)
+
+// Get value or else
+fun <T, E> Answer<T, E>.getOrElse(onError: (E) -> T): T = fold(
+    success = { it },
+    error = onError
+)
+
+// Check if success
+fun <T, E> Answer<T, E>.isSuccess(): Boolean = this is Answer.Success
+
+// Check if error
+fun <T, E> Answer<T, E>.isError(): Boolean = this is Answer.Error
+
+// Perform side effect on success
+fun <T, E> Answer<T, E>.onSuccess(block: (T) -> Unit): Answer<T, E> {
+    if (this is Answer.Success) block(data)
+    return this
+}
+
+// Perform side effect on error
+fun <T, E> Answer<T, E>.onError(block: (E) -> Unit): Answer<T, E> {
+    if (this is Answer.Error) block(reason)
+    return this
+}
+```
+
+<Tip>
+  These extensions make `Answer` even more ergonomic to use while maintaining type safety.
+</Tip>

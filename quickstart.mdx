@@ -1,80 +1,252 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get Real Clean Architecture in Android up and running in minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+Before you begin, ensure you have the following installed:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Android Studio" icon="android">
+    Latest stable version (Ladybug or newer recommended)
+  </Card>
+  
+  <Card title="JDK 17" icon="java">
+    Java Development Kit 17 or higher
+  </Card>
+  
+  <Card title="Git" icon="git">
+    For cloning the repository
+  </Card>
+  
+  <Card title="Android SDK" icon="mobile">
+    Min SDK 24, Target SDK 36
+  </Card>
 </CardGroup>
 
+## Installation
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the project from GitHub:
+    
+    ```bash
+    git clone https://github.com/DenisBronx/Real-Clean-Architecture-In-Android.git
+    cd Real-Clean-Architecture-In-Android
+    ```
+  </Step>
+  
+  <Step title="Open in Android Studio">
+    1. Launch Android Studio
+    2. Select **File > Open**
+    3. Navigate to the cloned directory
+    4. Click **OK**
+    
+    Android Studio will automatically sync Gradle and download dependencies.
+  </Step>
+  
+  <Step title="Wait for Gradle Sync">
+    The first sync may take a few minutes as Gradle downloads all dependencies. Watch the progress in the bottom status bar.
+    
+    <Note>
+      If you encounter sync errors, try **File > Invalidate Caches > Invalidate and Restart**
+    </Note>
+  </Step>
+  
+  <Step title="Build the Project">
+    Build the project to ensure everything is set up correctly:
+    
+    ```bash
+    ./gradlew build
+    ```
+    
+    Or use Android Studio's **Build > Make Project** menu.
+  </Step>
+  
+  <Step title="Run the App">
+    1. Connect an Android device or start an emulator
+    2. Select the **app** run configuration
+    3. Click the **Run** button (green triangle)
+    
+    The app should launch on your device/emulator.
+  </Step>
+</Steps>
+
+## Project Structure
+
+Once opened, you'll see the following module structure:
+
+```bash
+Real-Clean-Architecture-In-Android/
+├── app/                          # Main application module
+├── foundations/                  # Core utilities and Answer type
+├── cache/                        # Key-value storage
+├── httpclient/                   # Network client
+├── designsystem/                 # Reusable UI components
+│
+├── user-component/               # User domain & data
+├── product-component/            # Product domain & data
+├── cart-component/               # Cart domain & data
+├── wishlist-component/           # Wishlist domain & data
+├── money-component/              # Money domain object
+│
+├── onboarding-ui/                # Login screen
+├── plp-ui/                       # Product list screen
+├── cart-ui/                      # Cart screen
+├── wishlist-ui/                  # Wishlist screen
+├── main-ui/                      # Main navigation
+└── money-ui/                     # Price display components
+```
+
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  **Component modules** (e.g., `user-component`) are pure Kotlin/KMP and compile much faster than UI modules.
 </Note>
+
+## Running Tests
+
+The project includes comprehensive unit tests for all business logic.
+
+### Run All Tests
+
+```bash
+./gradlew test
+```
+
+### Run Tests for Specific Module
+
+```bash
+./gradlew :user-component:test
+./gradlew :cart-component:test
+```
+
+### Generate Code Coverage Report
+
+The project uses Kover for code coverage:
+
+```bash
+./gradlew koverHtmlReport
+```
+
+Open the report at `build/reports/kover/html/index.html`
+
+## Exploring the Code
+
+### Key Examples to Study
+
+<AccordionGroup>
+  <Accordion title="Domain Layer - Use Cases">
+    Check out `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/usecase/LoginUseCase.kt` to see pure business logic:
+    
+    ```kotlin
+    internal class LoginUseCase(
+        private val userRepository: UserRepository
+    ) : Login {
+        override suspend fun invoke(loginRequest: LoginRequest): Answer<Unit, LoginError> {
+            return when {
+                !Email(loginRequest.email).isValid() -> {
+                    Answer.Error(LoginError.InvalidEmail)
+                }
+                !Password(loginRequest.password).isValid() -> {
+                    Answer.Error(LoginError.InvalidPassword)
+                }
+                else -> {
+                    return userRepository.login(loginRequest)
+                }
+            }
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Data Layer - Repository">
+    See how repositories implement domain interfaces in `user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/data/repository/RealUserRepository.kt`
+  </Accordion>
+  
+  <Accordion title="Presentation Layer - ViewModel">
+    Explore ViewModels in UI modules like `onboarding-ui/src/main/java/com/denisbrandi/androidrealca/onboarding/presentation/viewmodel/`
+  </Accordion>
+  
+  <Accordion title="Dependency Injection">
+    Check assemblers in `app/src/main/java/com/denisbrandi/androidrealca/di/` to see how dependencies are wired together
+  </Accordion>
+</AccordionGroup>
+
+## Common Commands
+
+<CodeGroup>
+```bash Clean Build
+./gradlew clean build
+```
+
+```bash Run Tests
+./gradlew test
+```
+
+```bash Check Code Style
+./gradlew ktlintCheck
+```
+
+```bash Install Debug APK
+./gradlew installDebug
+```
+
+```bash Generate Coverage Report
+./gradlew koverHtmlReport
+```
+</CodeGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Gradle Sync Failed">
+    1. Check your internet connection
+    2. Verify JDK 17 is installed and configured
+    3. Try **File > Invalidate Caches > Invalidate and Restart**
+    4. Delete `.gradle` folder and sync again
+  </Accordion>
+  
+  <Accordion title="Build Errors">
+    1. Ensure Android SDK 36 is installed via SDK Manager
+    2. Check that `JAVA_HOME` points to JDK 17
+    3. Run `./gradlew clean build --refresh-dependencies`
+  </Accordion>
+  
+  <Accordion title="App Won't Run">
+    1. Verify your device/emulator is running Android 7.0 (API 24) or higher
+    2. Check that the device is connected: `adb devices`
+    3. Try uninstalling and reinstalling the app
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+The project uses these key dependencies:
+
+- **Kotlin**: 2.1.0+
+- **Compose**: BOM-based versioning
+- **Ktor**: For HTTP networking
+- **Multiplatform Settings**: For key-value storage
+- **Kover**: For code coverage
+
+Check `build.gradle.kts` files for specific versions.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture Overview" icon="sitemap" href="/architecture/overview">
+    Deep dive into the Clean Architecture implementation
+  </Card>
+  
+  <Card title="Component Modules" icon="boxes" href="/components/overview">
+    Understand how component modules are organized
+  </Card>
+  
+  <Card title="Testing Strategy" icon="vial" href="/testing/overview">
+    Learn the testing approach
+  </Card>
+  
+  <Card title="SOLID Principles" icon="star" href="/architecture/solid-principles">
+    Follow SOLID principles in your code
+  </Card>
+</CardGroup>

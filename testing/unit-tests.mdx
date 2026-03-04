@@ -1,0 +1,518 @@
+---
+title: Unit Tests
+description: Real-world unit testing examples from use cases, repositories, and view models
+---
+
+This page showcases actual unit tests from the Real Clean Architecture project, demonstrating testing patterns for each layer.
+
+## Use Case Tests
+
+Use cases contain business logic and are tested for correctness and proper delegation to repositories.
+
+### Simple Delegation Test
+
+Testing a use case that delegates to a repository:
+
+```kotlin cart-component/src/commonTest/kotlin/AddToWishlistUseCaseTest.kt
+package com.denisbrandi.androidrealca.wishlist.domain.usecase
+
+import com.denisbrandi.androidrealca.user.domain.model.User
+import com.denisbrandi.androidrealca.wishlist.domain.model.makeWishlistItem
+import com.denisbrandi.androidrealca.wishlist.domain.repository.TestWishlistRepository
+import kotlin.test.*
+
+class AddToWishlistUseCaseTest {
+
+    private val testWishlistRepository = TestWishlistRepository()
+    private val sut = AddToWishlistUseCase({ USER }, testWishlistRepository)
+
+    @Test
+    fun `EXPECT delegation to repository`() {
+        sut(WISHLIST_ITEM)
+
+        assertEquals(
+            listOf(USER_ID to WISHLIST_ITEM),
+            testWishlistRepository.addToWishlistInvocations
+        )
+    }
+
+    private companion object {
+        const val USER_ID = "1234"
+        val USER = User(USER_ID, "")
+        val WISHLIST_ITEM = makeWishlistItem()
+    }
+}
+```
+
+<Note>
+The test verifies that the use case correctly passes the user ID and wishlist item to the repository.
+</Note>
+
+### Business Logic Test
+
+Testing a use case with conditional logic:
+
+```kotlin cart-component/src/commonTest/kotlin/AddCartItemUseCaseTest.kt
+package com.denisbrandi.androidrealca.cart.domain.usecase
+
+import com.denisbrandi.androidrealca.cart.domain.model.*
+import com.denisbrandi.androidrealca.cart.domain.repository.TestCartRepository
+import com.denisbrandi.androidrealca.user.domain.model.User
+import com.denisbrandi.androidrealca.user.domain.usecase.GetUser
+import kotlin.test.*
+
+class AddCartItemUseCaseTest {
+
+    private val getUser = GetUser { USER }
+    private val cartRepository = TestCartRepository()
+    private val updateCartItem = TestUpdateCartItem()
+    private val sut = AddCartItemUseCase(getUser, cartRepository, updateCartItem)
+
+    @Test
+    fun `EXPECT item added to cart WHEN not present`() {
+        cartRepository.carts[USER_ID] = Cart(listOf(makeCartItem().copy(id = "1345")))
+
+        sut(CART_ITEM)
+
+        assertEquals(
+            listOf(CART_ITEM),
+            updateCartItem.invocations
+        )
+    }
+
+    @Test
+    fun `EXPECT quantity increased WHEN item already present in cart`() {
+        cartRepository.carts[USER_ID] = Cart(CART_ITEMS)
+
+        sut(CART_ITEM)
+
+        assertEquals(
+            listOf(CART_ITEM.copy(quantity = 8)),
+            updateCartItem.invocations
+        )
+    }
+
+    private class TestUpdateCartItem : UpdateCartItem {
+        val invocations = mutableListOf<CartItem>()
+        override fun invoke(cartItem: CartItem) {
+            invocations.add(cartItem)
+        }
+    }
+
+    private companion object {
+        const val USER_ID = "1234"
+        val USER = User(USER_ID, "")
+        val CART_ITEM = makeCartItem(quantity = 3)
+        val CART_ITEMS = listOf(CART_ITEM.copy(quantity = 5))
+    }
+}
+```
+
+<Tip>
+This test demonstrates how to test business logic that modifies behavior based on existing state (incrementing quantity vs adding new item).
+</Tip>
+
+### Validation Logic Test
+
+Testing a use case with input validation:
+
+```kotlin user-component/src/commonTest/kotlin/LoginUseCaseTest.kt
+package com.denisbrandi.androidrealca.user.domain.usecase
+
+import com.denisbrandi.androidrealca.foundations.Answer
+import com.denisbrandi.androidrealca.user.domain.model.*
+import com.denisbrandi.androidrealca.user.domain.repository.TestUserRepository
+import kotlin.test.*
+import kotlinx.coroutines.test.runTest
+
+class LoginUseCaseTest {
+
+    private val userRepository = TestUserRepository().also {
+        it.expectedLoginRequest = VALID_LOGIN_REQUEST
+    }
+    private val sut = LoginUseCase(userRepository)
+
+    @Test
+    fun `EXPECT invalid email error WHEN login request has invalid email`() = runTest {
+        val loginRequestWithInvalidEmail = LoginRequest("", "validPassword")
+
+        val result = sut(loginRequestWithInvalidEmail)
+
+        assertEquals(Answer.Error(LoginError.InvalidEmail), result)
+    }
+
+    @Test
+    fun `EXPECT invalid password error WHEN login request has invalid password`() = runTest {
+        val loginRequestWithInvalidPassword = LoginRequest("valid@email.com", "")
+
+        val result = sut(loginRequestWithInvalidPassword)
+
+        assertEquals(Answer.Error(LoginError.InvalidPassword), result)
+    }
+
+    @Test
+    fun `EXPECT success WHEN login request is valid and repository returns success`() = runTest {
+        val repositoryResult = Answer.Success(Unit)
+        userRepository.loginResult = repositoryResult
+
+        val result = sut(VALID_LOGIN_REQUEST)
+
+        assertEquals(repositoryResult, result)
+    }
+
+    @Test
+    fun `EXPECT error WHEN login request is valid and repository returns error`() = runTest {
+        val repositoryResult = Answer.Error(LoginError.GenericError)
+        userRepository.loginResult = repositoryResult
+
+        val result = sut(VALID_LOGIN_REQUEST)
+
+        assertEquals(repositoryResult, result)
+    }
+
+    private companion object {
+        val VALID_LOGIN_REQUEST = LoginRequest("valid@email.com", "validPassword")
+    }
+}
+```
+
+<Info>
+The `runTest` function from `kotlinx.coroutines.test` is used for testing suspending functions.
+</Info>
+
+## Repository Tests
+
+Repositories integrate with caching and network layers. Tests verify data flow and state management.
+
+### Flow-Based Repository Test
+
+Testing a repository that emits updates via Flow:
+
+```kotlin wishlist-component/src/commonTest/kotlin/RealWishlistRepositoryTest.kt
+package com.denisbrandi.androidrealca.wishlist.data.repository
+
+import com.denisbrandi.androidrealca.cache.test.TestCacheProvider
+import com.denisbrandi.androidrealca.flow.testobserver.test
+import com.denisbrandi.androidrealca.wishlist.data.model.JsonWishlistCacheDto
+import com.denisbrandi.androidrealca.wishlist.domain.model.makeWishlistItem
+import kotlin.test.*
+
+class RealWishlistRepositoryTest {
+
+    private val cacheProvider = TestCacheProvider(
+        "wishlist-cache",
+        JsonWishlistCacheDto(emptyMap())
+    )
+    private val sut = RealWishlistRepository(cacheProvider)
+
+    @Test
+    fun `EXPECT data saved and wishlist updates emitted`() {
+        val wishlistObserver = sut.observeWishlist(USER_ID).test()
+
+        sut.addToWishlist(USER_ID, WISHLIST_ITEM)
+
+        assertEquals(
+            listOf(emptyList(), listOf(WISHLIST_ITEM)),
+            wishlistObserver.getValues()
+        )
+    }
+
+    @Test
+    fun `EXPECT no new emissions WHEN item to add is already in wishlist`() {
+        val wishlistObserver = sut.observeWishlist(USER_ID).test()
+        sut.addToWishlist(USER_ID, WISHLIST_ITEM)
+
+        sut.addToWishlist(USER_ID, WISHLIST_ITEM)
+
+        assertEquals(
+            listOf(
+                emptyList(),
+                listOf(WISHLIST_ITEM),
+            ),
+            wishlistObserver.getValues()
+        )
+    }
+
+    @Test
+    fun `EXPECT data removed WHEN item to remove is in wishlist`() {
+        val wishlistObserver = sut.observeWishlist(USER_ID).test()
+        sut.addToWishlist(USER_ID, WISHLIST_ITEM)
+
+        sut.removeFromWishlist(USER_ID, WISHLIST_ITEM.id)
+
+        assertEquals(
+            listOf(
+                emptyList(),
+                listOf(WISHLIST_ITEM),
+                emptyList()
+            ),
+            wishlistObserver.getValues()
+        )
+    }
+
+    private companion object {
+        const val USER_ID = "1234"
+        val WISHLIST_ITEM = makeWishlistItem()
+    }
+}
+```
+
+<Tip>
+The `.test()` extension function creates a `FlowTestObserver` that collects all emitted values for assertion. See [Test Utilities](/testing/test-utilities#flow-test-observer) for details.
+</Tip>
+
+### Network Integration Test
+
+Testing a repository with network calls:
+
+```kotlin user-component/src/commonTest/kotlin/RealUserRepositoryTest.kt
+package com.denisbrandi.androidrealca.user.data.repository
+
+import com.denisbrandi.androidrealca.cache.test.TestCacheProvider
+import com.denisbrandi.androidrealca.foundations.Answer
+import com.denisbrandi.androidrealca.httpclient.RealHttpClientProvider.createClient
+import com.denisbrandi.androidrealca.user.data.model.JsonUserCacheDTO
+import com.denisbrandi.androidrealca.user.domain.model.*
+import com.denisbrandi.netmock.*
+import com.denisbrandi.netmock.engine.NetMockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
+import kotlin.test.*
+import kotlinx.coroutines.test.runTest
+
+class RealUserRepositoryTest {
+
+    private val config = MockEngineConfig()
+    private val netMock = NetMockEngine(config)
+    private val client = createClient(netMock)
+    private val cacheProvider = TestCacheProvider("user-cache", JsonUserCacheDTO("", ""))
+    private val sut = RealUserRepository(client, cacheProvider)
+
+    @Test
+    fun `EXPECT incorrect credentials WHEN response is 401`() = runTest {
+        netMock.addMock(
+            request = EXPECTED_REQUEST,
+            response = {
+                code = 401
+            }
+        )
+
+        val result = sut.login(LOGIN_REQUEST)
+
+        assertEquals(Answer.Error(LoginError.IncorrectCredentials), result)
+    }
+
+    @Test
+    fun `EXPECT success and data cached WHEN response is successful`() = runTest {
+        netMock.addMock(
+            request = EXPECTED_REQUEST,
+            response = {
+                code = 200
+                mandatoryHeaders = RESPONSE_HEADERS
+                body = RESPONSE_BODY
+            }
+        )
+
+        val result = sut.login(LOGIN_REQUEST)
+
+        assertEquals(Answer.Success(Unit), result)
+        assertEquals(EXPECTED_CACHED_OBJECT, cacheProvider.providedCachedObject.get())
+        assertTrue(sut.isLoggedIn())
+    }
+
+    private companion object {
+        val LOGIN_REQUEST = LoginRequest("valid@email.com", "12345678")
+        const val RESPONSE_BODY = """{
+             "id": "AmazingAndroidDevId",
+             "fullName": "Amazing Android Dev"
+        }"""
+        val EXPECTED_REQUEST = NetMockRequest(
+            requestUrl = "https://api.json-generator.com/templates/Q7s_NUVpyBND/data",
+            method = Method.Post,
+            body = """{"email": "valid@email.com", "password": "12345678"}"""
+        )
+        val EXPECTED_CACHED_OBJECT = JsonUserCacheDTO("AmazingAndroidDevId", "Amazing Android Dev")
+    }
+}
+```
+
+<Note>
+Network tests use NetMock to simulate HTTP responses without making real network calls.
+</Note>
+
+## ViewModel Tests
+
+ViewModels manage UI state and coordinate use cases. Tests verify state updates and use case invocations.
+
+### State Management Test
+
+```kotlin wishlist-ui/src/test/java/RealWishlistViewModelTest.kt
+package com.denisbrandi.androidrealca.wishlist.presentation.viewmodel
+
+import com.denisbrandi.androidrealca.cart.domain.model.CartItem
+import com.denisbrandi.androidrealca.cart.domain.usecase.AddCartItem
+import com.denisbrandi.androidrealca.coroutines.testdispatcher.MainCoroutineRule
+import com.denisbrandi.androidrealca.flow.testobserver.*
+import com.denisbrandi.androidrealca.money.domain.model.Money
+import com.denisbrandi.androidrealca.viewmodel.StateDelegate
+import com.denisbrandi.androidrealca.wishlist.domain.model.WishlistItem
+import com.denisbrandi.androidrealca.wishlist.domain.usecase.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.test.runTest
+import org.junit.*
+import org.junit.Assert.assertEquals
+
+class RealWishlistViewModelTest {
+
+    @get:Rule
+    val rule = MainCoroutineRule()
+
+    private val observeUserWishlist = TestObserveUserWishlist()
+    private val removeFromWishlist = TestRemoveFromWishlist()
+    private val addCartItem = TestAddCartItem()
+    private lateinit var sut: RealWishlistViewModel
+    private lateinit var stateObserver: FlowTestObserver<WishlistScreenState>
+
+    @Before
+    fun setUp() {
+        sut = RealWishlistViewModel(
+            observeUserWishlist,
+            removeFromWishlist,
+            addCartItem,
+            StateDelegate()
+        )
+        stateObserver = sut.state.test()
+    }
+
+    @Test
+    fun `EXPECT wishlist updates`() = runTest {
+        observeUserWishlist.wishlistUpdates.emit(WISHLIST_ITEMS)
+
+        assertEquals(
+            listOf(
+                WishlistScreenState(emptyList()),
+                WishlistScreenState(WISHLIST_ITEMS)
+            ),
+            stateObserver.getValues()
+        )
+    }
+
+    @Test
+    fun `EXPECT item removed from wishlist`() = runTest {
+        sut.removeItemFromWishlist("1")
+
+        assertEquals(listOf("1"), removeFromWishlist.invocations)
+    }
+
+    @Test
+    fun `EXPECT item added to cart`() {
+        sut.addProductToCart(WISHLIST_ITEM)
+
+        assertEquals(listOf(CART_ITEM), addCartItem.invocations)
+    }
+
+    private class TestObserveUserWishlist : ObserveUserWishlist {
+        val wishlistUpdates = MutableStateFlow(emptyList<WishlistItem>())
+        override fun invoke(): Flow<List<WishlistItem>> = wishlistUpdates
+    }
+
+    private class TestRemoveFromWishlist : RemoveFromWishlist {
+        val invocations = mutableListOf<String>()
+        override fun invoke(wishlistItemId: String) {
+            invocations.add(wishlistItemId)
+        }
+    }
+
+    private class TestAddCartItem : AddCartItem {
+        val invocations = mutableListOf<CartItem>()
+        override fun invoke(cartItem: CartItem) {
+            invocations.add(cartItem)
+        }
+    }
+
+    private companion object {
+        val WISHLIST_ITEM = WishlistItem(
+            id = "1",
+            name = "Wireless Headphones",
+            money = Money(99.99, "$"),
+            imageUrl = "https://m.media-amazon.com/images/I/61fU3njgzZL._AC_SL1500_.jpg"
+        )
+        val WISHLIST_ITEMS = listOf(WISHLIST_ITEM)
+        val CART_ITEM = CartItem(
+            "1",
+            "Wireless Headphones",
+            Money(99.99, "$"),
+            "https://m.media-amazon.com/images/I/61fU3njgzZL._AC_SL1500_.jpg",
+            quantity = 1
+        )
+    }
+}
+```
+
+<Tip>
+ViewModel tests use `MainCoroutineRule` to set up the test dispatcher for coroutines. See [Test Utilities](/testing/test-utilities#coroutines-test-dispatcher) for details.
+</Tip>
+
+## Test Doubles
+
+The project uses simple test double implementations instead of mocking frameworks:
+
+```kotlin
+private class TestObserveUserWishlist : ObserveUserWishlist {
+    val wishlistUpdates = MutableStateFlow(emptyList<WishlistItem>())
+    override fun invoke(): Flow<List<WishlistItem>> = wishlistUpdates
+}
+
+private class TestRemoveFromWishlist : RemoveFromWishlist {
+    val invocations = mutableListOf<String>()
+    override fun invoke(wishlistItemId: String) {
+        invocations.add(wishlistItemId)
+    }
+}
+```
+
+<Info>
+Test doubles provide full control over behavior and make tests easier to understand without framework magic.
+</Info>
+
+## Running Tests
+
+```bash Terminal
+# Run all tests
+./gradlew test
+
+# Run specific module tests
+./gradlew :wishlist-component:test
+
+# Run with coverage
+./gradlew testDebugUnitTest jacocoTestReport
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use descriptive test names">
+    Follow the `EXPECT <outcome> WHEN <condition>` pattern for clarity.
+  </Accordion>
+  
+  <Accordion title="Test one behavior per test">
+    Keep tests focused on a single aspect of behavior.
+  </Accordion>
+  
+  <Accordion title="Use test utilities">
+    Leverage `FlowTestObserver` and `MainCoroutineRule` for consistent coroutine testing.
+  </Accordion>
+  
+  <Accordion title="Prefer test doubles over mocks">
+    Simple test implementations are clearer than mocking framework magic.
+  </Accordion>
+  
+  <Accordion title="Test edge cases">
+    Include tests for error conditions, empty states, and boundary conditions.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Card title="Test Utilities" icon="wrench" href="/testing/test-utilities">
+  Learn about the custom testing utilities used in these examples
+</Card>

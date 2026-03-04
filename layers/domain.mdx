@@ -1,0 +1,266 @@
+---
+title: Domain Layer
+description: The core business logic layer containing use cases, repository interfaces, and domain models
+---
+
+The **Domain Layer** is the innermost layer of Real Clean Architecture. It contains the business logic and rules of your application, completely independent of frameworks, UI, and data sources.
+
+## Key Components
+
+The domain layer consists of three main components:
+
+1. **Domain Models** - Pure business entities
+2. **Repository Interfaces** - Contracts for data access
+3. **Use Cases** - Application-specific business rules
+
+## Domain Models
+
+Domain models are pure data classes that represent business entities. They contain business logic but have no dependencies on Android or external frameworks.
+
+### Example: Cart Domain Models
+
+<CodeGroup>
+
+```kotlin cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/model/Cart.kt
+package com.denisbrandi.androidrealca.cart.domain.model
+
+import com.denisbrandi.androidrealca.money.domain.model.Money
+
+data class Cart(val cartItems: List<CartItem>) {
+    fun getSubtotal(): Money? {
+        return if (cartItems.isNotEmpty()) {
+            val currency = cartItems[0].money.currencySymbol
+            var subtotal = 0.0
+            cartItems.forEach {
+                subtotal += it.money.amount * it.quantity
+            }
+            Money(subtotal, currency)
+        } else {
+            null
+        }
+    }
+
+    fun getNumberOfItems(): Int {
+        return cartItems.sumOf { it.quantity }
+    }
+}
+```
+
+```kotlin cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/model/CartItem.kt
+package com.denisbrandi.androidrealca.cart.domain.model
+
+import com.denisbrandi.androidrealca.money.domain.model.Money
+
+data class CartItem(
+    val id: String,
+    val name: String,
+    val money: Money,
+    val imageUrl: String,
+    val quantity: Int
+)
+```
+
+</CodeGroup>
+
+<Note>
+Notice how `Cart` contains business logic (`getSubtotal()`, `getNumberOfItems()`) but has zero dependencies on Android or external frameworks.
+</Note>
+
+### Example: User Domain Models
+
+<CodeGroup>
+
+```kotlin user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/User.kt
+package com.denisbrandi.androidrealca.user.domain.model
+
+data class User(val id: String, val fullName: String)
+```
+
+```kotlin user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/model/Email.kt
+package com.denisbrandi.androidrealca.user.domain.model
+
+class Email(private val value: String) {
+    fun isValid(): Boolean {
+        return value.isNotBlank() && value.matches(Regex(EMAIL_ADDRESS_PATTERN))
+    }
+
+    private companion object {
+        const val EMAIL_ADDRESS_PATTERN =
+            "(?:[a-zA-Z0-9!#\$%&'*+/=?^_`{|}~-]+(?:\\.[a-zA-Z0-9!#\$%&'*+/=?^_`{|}~-]+)*|\"(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21\\x23-\\x5b\\x5d-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])*\")@(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?|\\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-zA-Z0-9-]*[a-zA-Z0-9]:(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21-\\x5a\\x53-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])+)\\])"
+    }
+}
+```
+
+</CodeGroup>
+
+<Tip>
+Domain models can include validation logic like `Email.isValid()` to enforce business rules.
+</Tip>
+
+## Repository Interfaces
+
+Repositories define **contracts** for data access. The domain layer only contains interfaces - actual implementations live in the data layer.
+
+### Example: CartRepository Interface
+
+```kotlin cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/repository/CartRepository.kt
+package com.denisbrandi.androidrealca.cart.domain.repository
+
+import com.denisbrandi.androidrealca.cart.domain.model.*
+import kotlinx.coroutines.flow.Flow
+
+internal interface CartRepository {
+    fun updateCartItem(userId: String, cartItem: CartItem)
+    fun observeCart(userId: String): Flow<Cart>
+    fun getCart(userId: String): Cart
+}
+```
+
+### Example: UserRepository Interface
+
+```kotlin user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/repository/UserRepository.kt
+package com.denisbrandi.androidrealca.user.domain.repository
+
+import com.denisbrandi.androidrealca.foundations.Answer
+import com.denisbrandi.androidrealca.user.domain.model.*
+
+internal interface UserRepository {
+    suspend fun login(loginRequest: LoginRequest): Answer<Unit, LoginError>
+    fun getUser(): User
+    fun isLoggedIn(): Boolean
+}
+```
+
+### Example: ProductRepository Interface
+
+```kotlin product-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/product/domain/repository/ProductRepository.kt
+package com.denisbrandi.androidrealca.product.domain.repository
+
+import com.denisbrandi.androidrealca.foundations.Answer
+import com.denisbrandi.androidrealca.product.domain.model.Product
+
+internal interface ProductRepository {
+    suspend fun getProducts(): Answer<List<Product>, Unit>
+}
+```
+
+<Warning>
+Repository interfaces belong to the **domain layer**, but implementations belong to the **data layer**. This follows the Dependency Inversion Principle.
+</Warning>
+
+## Use Cases
+
+Use cases (also called interactors) encapsulate business logic for specific application operations. Each use case has a single responsibility.
+
+### Example: ObserveUserCartUseCase
+
+```kotlin cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/ObserveUserCartUseCase.kt
+package com.denisbrandi.androidrealca.cart.domain.usecase
+
+import com.denisbrandi.androidrealca.cart.domain.model.Cart
+import com.denisbrandi.androidrealca.cart.domain.repository.CartRepository
+import com.denisbrandi.androidrealca.user.domain.usecase.GetUser
+import kotlinx.coroutines.flow.Flow
+
+internal class ObserveUserCartUseCase(
+    private val getUser: GetUser,
+    private val cartRepository: CartRepository
+) : ObserveUserCart {
+    override fun invoke(): Flow<Cart> {
+        return cartRepository.observeCart(getUser().id)
+    }
+}
+```
+
+### Example: AddCartItemUseCase
+
+```kotlin cart-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/cart/domain/usecase/AddCartItemUseCase.kt
+package com.denisbrandi.androidrealca.cart.domain.usecase
+
+import com.denisbrandi.androidrealca.cart.domain.model.CartItem
+import com.denisbrandi.androidrealca.cart.domain.repository.CartRepository
+import com.denisbrandi.androidrealca.user.domain.usecase.GetUser
+
+internal class AddCartItemUseCase(
+    private val getUser: GetUser,
+    private val cartRepository: CartRepository,
+    private val updateCartItem: UpdateCartItem
+) : AddCartItem {
+    override fun invoke(cartItem: CartItem) {
+        val cartItemInCart = cartRepository.getCart(getUser().id).cartItems.find {
+            it.id == cartItem.id
+        }
+        if (cartItemInCart != null) {
+            updateCartItem(cartItemInCart.copy(quantity = cartItemInCart.quantity + cartItem.quantity))
+        } else {
+            updateCartItem(cartItem)
+        }
+    }
+}
+```
+
+### Example: LoginUseCase
+
+```kotlin user-component/src/commonMain/kotlin/com/denisbrandi/androidrealca/user/domain/usecase/LoginUseCase.kt
+package com.denisbrandi.androidrealca.user.domain.usecase
+
+import com.denisbrandi.androidrealca.foundations.Answer
+import com.denisbrandi.androidrealca.user.domain.model.*
+import com.denisbrandi.androidrealca.user.domain.repository.UserRepository
+
+internal class LoginUseCase(
+    private val userRepository: UserRepository
+) : Login {
+    override suspend fun invoke(loginRequest: LoginRequest): Answer<Unit, LoginError> {
+        return when {
+            !Email(loginRequest.email).isValid() -> {
+                Answer.Error(LoginError.InvalidEmail)
+            }
+
+            !Password(loginRequest.password).isValid() -> {
+                Answer.Error(LoginError.InvalidPassword)
+            }
+
+            else -> {
+                return userRepository.login(loginRequest)
+            }
+        }
+    }
+}
+```
+
+<Check>
+**Use Case Best Practices:**
+- Single responsibility - one operation per use case
+- Dependencies injected via constructor
+- Business logic validation before delegating to repositories
+- Returns domain models, never DTOs
+</Check>
+
+## Benefits of the Domain Layer
+
+<CardGroup cols={2}>
+  <Card title="Framework Independent" icon="circle-nodes">
+    No dependencies on Android, UI frameworks, or external libraries
+  </Card>
+  <Card title="Testable" icon="vial">
+    Pure business logic is easy to unit test without mocks or Android dependencies
+  </Card>
+  <Card title="Reusable" icon="arrows-rotate">
+    Domain logic can be shared across Android, iOS, and backend using Kotlin Multiplatform
+  </Card>
+  <Card title="Maintainable" icon="screwdriver-wrench">
+    Clear separation of concerns makes code easier to understand and modify
+  </Card>
+</CardGroup>
+
+## Related Layers
+
+<CardGroup cols={2}>
+  <Card title="Data Layer" icon="database" href="/layers/data">
+    Implements repository interfaces and handles data sources
+  </Card>
+  <Card title="Presentation Layer" icon="desktop" href="/layers/presentation">
+    Consumes use cases to drive UI behavior
+  </Card>
+</CardGroup>
