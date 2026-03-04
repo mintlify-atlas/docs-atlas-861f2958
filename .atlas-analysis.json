@@ -1,0 +1,128 @@
+{
+  "projectType": "general",
+  "projectName": "Real Clean Architecture in Android",
+  "projectDescription": "A demonstration of Clean Architecture implementation in Android following SOLID principles with minimal third-party dependencies.",
+  "theme": "linden",
+  "primaryColor": "#3DDC84",
+  "lightColor": "#7EE9A8",
+  "darkColor": "#2BB26A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/clean-architecture",
+              "architecture/solid-principles",
+              "architecture/modularization"
+            ]
+          },
+          {
+            "group": "Layers",
+            "pages": [
+              "layers/domain",
+              "layers/data",
+              "layers/presentation"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "components/overview",
+              "components/cart",
+              "components/product",
+              "components/user",
+              "components/wishlist",
+              "components/money"
+            ]
+          },
+          {
+            "group": "Libraries",
+            "pages": [
+              "libraries/overview",
+              "libraries/cache",
+              "libraries/httpclient",
+              "libraries/viewmodel",
+              "libraries/foundations"
+            ]
+          },
+          {
+            "group": "Testing",
+            "pages": [
+              "testing/overview",
+              "testing/unit-tests",
+              "testing/test-utilities"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Domain Layer",
+            "pages": [
+              "api/domain/use-cases",
+              "api/domain/repositories",
+              "api/domain/models"
+            ]
+          },
+          {
+            "group": "Data Layer",
+            "pages": [
+              "api/data/repositories",
+              "api/data/cache"
+            ]
+          },
+          {
+            "group": "Presentation Layer",
+            "pages": [
+              "api/presentation/viewmodels",
+              "api/presentation/screens"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Clean Architecture with strict layer separation",
+    "SOLID principles implementation",
+    "Package by Component modularization",
+    "Kotlin Multiplatform for business logic",
+    "Minimal third-party dependencies",
+    "Comprehensive test coverage",
+    "Manual dependency injection",
+    "Framework-independent domain layer"
+  ],
+  "publicApiSurface": [
+    "CartComponentAssembler",
+    "ProductComponentAssembler",
+    "UserComponentAssembler",
+    "WishlistComponentAssembler",
+    "AddCartItem",
+    "ObserveUserCart",
+    "UpdateCartItem",
+    "GetProducts",
+    "LoginUseCase",
+    "AddWishlistItem",
+    "RemoveWishlistItem",
+    "ObserveUserWishlistIds",
+    "CartRepository",
+    "ProductRepository",
+    "UserRepository",
+    "WishlistRepository",
+    "CacheProvider",
+    "HttpClientProvider"
+  ]
+}
